@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投資儀表板 - Fintech Evolution</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-family: 'Arial', sans-serif;
+            min-height: 100vh;
+        }
+        .dashboard-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+        .metric-card {
+            text-align: center;
+            padding: 30px 20px;
+        }
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+        .metric-label {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-top: 10px;
+        }
+        .trend-up { color: #28a745; }
+        .trend-down { color: #dc3545; }
+        .sidebar {
+            background: rgba(0,0,0,0.3);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .nav-item {
+            margin-bottom: 10px;
+        }
+        .nav-link {
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .chart-container {
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .watchlist-item {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+        .stock-symbol {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .stock-price {
+            font-size: 1.2rem;
+            color: #4ecdc4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 側邊欄 -->
+            <div class="col-md-2 sidebar">
+                <div class="text-center mb-4">
+                    <h4><i class="fas fa-chart-line"></i> Fintech Evolution</h4>
+                </div>
+                
+                <nav class="nav flex-column">
+                    <a class="nav-link active" href="#overview">
+                        <i class="fas fa-tachometer-alt"></i> 總覽
+                    </a>
+                    <a class="nav-link" href="#portfolio">
+                        <i class="fas fa-briefcase"></i> 投資組合
+                    </a>
+                    <a class="nav-link" href="#watchlist">
+                        <i class="fas fa-eye"></i> 觀察清單
+                    </a>
+                    <a class="nav-link" href="#analysis">
+                        <i class="fas fa-chart-area"></i> 技術分析
+                    </a>
+                    <a class="nav-link" href="#screening">
+                        <i class="fas fa-filter"></i> 選股器
+                    </a>
+                    <a class="nav-link" href="/">
+                        <i class="fas fa-home"></i> 返回首頁
+                    </a>
+                </nav>
+            </div>
+
+            <!-- 主要內容 -->
+            <div class="col-md-10">
+                <div class="container-fluid py-4">
+                    <!-- 頁面標題 -->
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="fas fa-tachometer-alt"></i> 投資儀表板</h2>
+                        <div class="text-end">
+                            <small class="opacity-75">最後更新: <span id="lastUpdate"></span></small>
+                        </div>
+                    </div>
+
+                    <!-- 關鍵指標卡片 -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="dashboard-card metric-card">
+                                <div class="metric-value" id="totalValue">$0</div>
+                                <div class="metric-label">總投資價值</div>
+                                <div class="mt-2">
+                                    <span class="trend-up"><i class="fas fa-arrow-up"></i> +2.5%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="dashboard-card metric-card">
+                                <div class="metric-value" id="totalReturn">+$0</div>
+                                <div class="metric-label">總收益</div>
+                                <div class="mt-2">
+                                    <span class="trend-up"><i class="fas fa-arrow-up"></i> +15.2%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="dashboard-card metric-card">
+                                <div class="metric-value" id="avgScore">0</div>
+                                <div class="metric-label">平均評分</div>
+                                <div class="mt-2">
+                                    <span class="trend-up"><i class="fas fa-arrow-up"></i> A級</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="dashboard-card metric-card">
+                                <div class="metric-value" id="activePositions">0</div>
+                                <div class="metric-label">持倉數量</div>
+                                <div class="mt-2">
+                                    <span class="text-info"><i class="fas fa-chart-pie"></i> 多元化</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 圖表區域 -->
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-chart-line"></i> 投資組合表現</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="portfolioPerformanceChart" style="height: 400px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-pie-chart"></i> 資產配置</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="assetAllocationChart" style="height: 400px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 觀察清單和熱門股票 -->
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="dashboard-card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5><i class="fas fa-eye"></i> 觀察清單</h5>
+                                    <button class="btn btn-sm btn-outline-light" onclick="refreshWatchlist()">
+                                        <i class="fas fa-refresh"></i>
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <div id="watchlistContainer">
+                                        <!-- 觀察清單項目將在這裡動態生成 -->
+                                    </div>
+                                    <div class="text-center mt-3">
+                                        <button class="btn btn-outline-light btn-sm" onclick="addToWatchlist()">
+                                            <i class="fas fa-plus"></i> 添加股票
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-fire"></i> 今日熱門</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="hotStocksContainer">
+                                        <!-- 熱門股票將在這裡顯示 -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 快速操作區 -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-bolt"></i> 快速操作</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row text-center">
+                                        <div class="col-md-3">
+                                            <button class="btn btn-outline-light btn-lg w-100 mb-2" onclick="quickAnalysis()">
+                                                <i class="fas fa-search"></i><br>快速分析
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button class="btn btn-outline-light btn-lg w-100 mb-2" onclick="runScreener()">
+                                                <i class="fas fa-filter"></i><br>運行選股器
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button class="btn btn-outline-light btn-lg w-100 mb-2" onclick="rebalancePortfolio()">
+                                                <i class="fas fa-balance-scale"></i><br>重新平衡
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <button class="btn btn-outline-light btn-lg w-100 mb-2" onclick="generateReport()">
+                                                <i class="fas fa-file-alt"></i><br>生成報告
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 初始化儀表板
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDashboard();
+            updateLastUpdateTime();
+            setInterval(updateLastUpdateTime, 60000); // 每分鐘更新時間
+        });
+
+        function initializeDashboard() {
+            // 創建模擬數據
+            createPortfolioPerformanceChart();
+            createAssetAllocationChart();
+            loadWatchlist();
+            loadHotStocks();
+            updateMetrics();
+        }
+
+        function updateLastUpdateTime() {
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleString('zh-TW');
+        }
+
+        function createPortfolioPerformanceChart() {
+            // 模擬投資組合表現數據
+            const dates = [];
+            const values = [];
+            const startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - 6);
+
+            for (let i = 0; i < 180; i++) {
+                const date = new Date(startDate);
+                date.setDate(date.getDate() + i);
+                dates.push(date.toISOString().split('T')[0]);
+                
+                // 模擬波動的投資組合價值
+                const baseValue = 100000;
+                const trend = i * 50; // 上升趨勢
+                const volatility = Math.sin(i * 0.1) * 2000 + Math.random() * 1000;
+                values.push(baseValue + trend + volatility);
+            }
+
+            const trace = {
+                x: dates,
+                y: values,
+                type: 'scatter',
+                mode: 'lines',
+                name: '投資組合價值',
+                line: { color: '#4ecdc4', width: 3 }
+            };
+
+            const layout = {
+                title: '投資組合表現趨勢',
+                xaxis: { title: '日期' },
+                yaxis: { title: '價值 ($)' },
+                template: 'plotly_dark',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)'
+            };
+
+            Plotly.newPlot('portfolioPerformanceChart', [trace], layout, {responsive: true});
+        }
+
+        function createAssetAllocationChart() {
+            const data = [{
+                values: [35, 25, 20, 15, 5],
+                labels: ['美股', '加密貨幣', '債券', 'ETF', '現金'],
+                type: 'pie',
+                hole: 0.4,
+                marker: {
+                    colors: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57']
+                }
+            }];
+
+            const layout = {
+                title: '資產配置分布',
+                template: 'plotly_dark',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                showlegend: true
+            };
+
+            Plotly.newPlot('assetAllocationChart', data, layout, {responsive: true});
+        }
+
+        function loadWatchlist() {
+            const watchlist = ['AAPL', 'TSLA', 'NVDA', 'COIN', 'MSTR'];
+            const container = document.getElementById('watchlistContainer');
+            
+            container.innerHTML = watchlist.map(symbol => `
+                <div class="watchlist-item">
+                    <div>
+                        <div class="stock-symbol">${symbol}</div>
+                        <small class="opacity-75">科技股</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="stock-price">$${(Math.random() * 200 + 100).toFixed(2)}</div>
+                        <small class="trend-up">+${(Math.random() * 5).toFixed(2)}%</small>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadHotStocks() {
+            const hotStocks = [
+                { symbol: 'AAPL', change: '+2.5%', volume: '高' },
+                { symbol: 'TSLA', change: '+5.2%', volume: '極高' },
+                { symbol: 'NVDA', change: '+3.1%', volume: '高' },
+                { symbol: 'COIN', change: '-1.2%', volume: '中' },
+                { symbol: 'MSTR', change: '+8.7%', volume: '極高' }
+            ];
+
+            const container = document.getElementById('hotStocksContainer');
+            
+            container.innerHTML = hotStocks.map(stock => `
+                <div class="watchlist-item">
+                    <div>
+                        <div class="stock-symbol">${stock.symbol}</div>
+                        <small class="opacity-75">成交量: ${stock.volume}</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="${stock.change.startsWith('+') ? 'trend-up' : 'trend-down'}">
+                            ${stock.change}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateMetrics() {
+            // 更新關鍵指標
+            document.getElementById('totalValue').textContent = '$125,430';
+            document.getElementById('totalReturn').textContent = '+$25,430';
+            document.getElementById('avgScore').textContent = '78.5';
+            document.getElementById('activePositions').textContent = '12';
+        }
+
+        // 快速操作函數
+        function quickAnalysis() {
+            const symbol = prompt('請輸入要分析的股票代號:');
+            if (symbol) {
+                window.open(`/?symbol=${symbol}`, '_blank');
+            }
+        }
+
+        function runScreener() {
+            alert('選股器功能開發中...');
+        }
+
+        function rebalancePortfolio() {
+            alert('投資組合重新平衡功能開發中...');
+        }
+
+        function generateReport() {
+            alert('報告生成功能開發中...');
+        }
+
+        function refreshWatchlist() {
+            loadWatchlist();
+            alert('觀察清單已更新');
+        }
+
+        function addToWatchlist() {
+            const symbol = prompt('請輸入要添加的股票代號:');
+            if (symbol) {
+                alert(`${symbol} 已添加到觀察清單`);
+                loadWatchlist();
+            }
+        }
+
+        // 側邊欄導航
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (this.getAttribute('href').startsWith('#')) {
+                    e.preventDefault();
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                    this.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
