@@ -3,453 +3,301 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fintech Evolution - 跨鏈投資組合管理平台</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <title>VCP & RS Fusion: The Next-Gen Growth Stock Screener</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        body { 
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: white;
-            font-family: 'Arial', sans-serif;
+        .signal-card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        .hero-section {
-            background: rgba(0,0,0,0.3);
-            padding: 60px 0;
-            text-align: center;
-        }
-        .card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: white;
-        }
-        .btn-primary {
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            border: none;
-            transition: all 0.3s ease;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        }
-        .feature-icon {
+        .score-display {
             font-size: 3rem;
-            margin-bottom: 20px;
-            color: #4ecdc4;
+            font-weight: bold;
+        }
+        .pattern-badge {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
         }
         .loading {
             display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        .result-card {
-            margin-top: 20px;
-            display: none;
-        }
-        .score-badge {
-            font-size: 1.2rem;
-            padding: 10px 15px;
         }
         .chart-container {
-            background: rgba(0,0,0,0.2);
-            border-radius: 10px;
-            padding: 20px;
+            height: 500px;
             margin: 20px 0;
         }
     </style>
 </head>
-<body>
-    <!-- 導航欄 -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">
-                <i class="fas fa-chart-line"></i> Fintech Evolution
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="#features">功能</a>
-                <a class="nav-link" href="#analysis">分析</a>
-                <a class="nav-link" href="/dashboard">儀表板</a>
-            </div>
+<body class="bg-light">
+    <div class="container py-5">
+        <!-- 標題區域 -->
+        <div class="text-center mb-5">
+            <h1 class="display-4 fw-bold text-primary">🚀 VCP & RS Fusion</h1>
+            <p class="lead text-muted">The Next-Gen Growth Stock Screener</p>
+            <p class="text-secondary">基於 William O'Neil 和 Mark Minervini 成長股分析哲學</p>
         </div>
-    </nav>
 
-    <!-- 英雄區塊 -->
-    <section class="hero-section">
-        <div class="container">
-            <h1 class="display-4 mb-4">
-                <i class="fas fa-rocket"></i> 跨鏈投資組合管理平台
-            </h1>
-            <p class="lead mb-5">
-                整合Web3、加密貨幣與傳統金融的智能投資解決方案<br>
-                技術指標選股 + Swing Trading形態識別 + AI評分系統
-            </p>
-            <a href="#analysis" class="btn btn-primary btn-lg">
-                <i class="fas fa-play"></i> 開始分析
-            </a>
-        </div>
-    </section>
-
-    <!-- 功能特色 -->
-    <section id="features" class="py-5">
-        <div class="container">
-            <h2 class="text-center mb-5">核心功能</h2>
-            <div class="row">
-                <div class="col-md-3 text-center mb-4">
-                    <div class="feature-icon">
-                        <i class="fas fa-chart-area"></i>
-                    </div>
-                    <h4>技術指標分析</h4>
-                    <p>MACD、RSI、移動平均線等專業技術指標</p>
-                </div>
-                <div class="col-md-3 text-center mb-4">
-                    <div class="feature-icon">
-                        <i class="fas fa-shapes"></i>
-                    </div>
-                    <h4>形態識別</h4>
-                    <p>VCP、杯柄、突破等經典Swing Trading形態</p>
-                </div>
-                <div class="col-md-3 text-center mb-4">
-                    <div class="feature-icon">
-                        <i class="fas fa-star"></i>
-                    </div>
-                    <h4>RS Rating</h4>
-                    <p>相對強度評級，識別市場領導股</p>
-                </div>
-                <div class="col-md-3 text-center mb-4">
-                    <div class="feature-icon">
-                        <i class="fas fa-trophy"></i>
-                    </div>
-                    <h4>智能評分</h4>
-                    <p>多維度評分系統，精準投資建議</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 分析工具 -->
-    <section id="analysis" class="py-5">
-        <div class="container">
-            <div class="row">
-                <!-- 單股分析 -->
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h4><i class="fas fa-search"></i> 單股深度分析</h4>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label class="form-label">股票代號</label>
-                                <input type="text" class="form-control" id="singleStock" 
-                                       placeholder="例如: AAPL, TSLA, NVDA" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white;">
-                            </div>
-                            <button class="btn btn-primary w-100" onclick="analyzeSingleStock()">
-                                <i class="fas fa-analytics"></i> 開始分析
+        <!-- 輸入區域 -->
+        <div class="row justify-content-center mb-4">
+            <div class="col-md-6">
+                <div class="card signal-card">
+                    <div class="card-body p-4">
+                        <h5 class="card-title text-center mb-3">股票分析</h5>
+                        <div class="input-group mb-3">
+                            <input type="text" id="tickerInput" class="form-control form-control-lg" 
+                                   placeholder="輸入股票代號 (例如: TSLA, AAPL)" maxlength="10">
+                            <button class="btn btn-primary btn-lg" type="button" id="analyzeBtn">
+                                <span class="analyze-text">生成信號</span>
+                                <span class="loading spinner-border spinner-border-sm" role="status"></span>
                             </button>
-                            
-                            <div id="singleLoading" class="loading">
-                                <div class="spinner-border text-primary" role="status"></div>
-                                <p class="mt-2">分析中...</p>
-                            </div>
-                            
-                            <div id="singleResult" class="result-card">
-                                <!-- 分析結果將在這裡顯示 -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 批量選股 -->
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h4><i class="fas fa-list"></i> 批量選股分析</h4>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label class="form-label">股票列表 (用逗號分隔)</label>
-                                <textarea class="form-control" id="stockList" rows="3" 
-                                         placeholder="例如: AAPL,TSLA,NVDA,COIN,MSTR" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white;"></textarea>
-                            </div>
-                            <button class="btn btn-primary w-100" onclick="screenStocks()">
-                                <i class="fas fa-filter"></i> 批量選股
-                            </button>
-                            
-                            <div id="screenLoading" class="loading">
-                                <div class="spinner-border text-primary" role="status"></div>
-                                <p class="mt-2">選股中...</p>
-                            </div>
-                            
-                            <div id="screenResult" class="result-card">
-                                <!-- 選股結果將在這裡顯示 -->
-                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
 
-    <!-- 結果顯示區域 -->
-    <div class="container mt-5">
-        <div id="chartsContainer"></div>
+        <!-- 結果區域 -->
+        <div id="resultsSection" style="display: none;">
+            <!-- 信號卡片 -->
+            <div class="row justify-content-center mb-4">
+                <div class="col-md-8">
+                    <div class="card signal-card">
+                        <div class="card-body text-center p-4">
+                            <h5 class="card-title mb-3">綜合信號評分</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div id="scoreDisplay" class="score-display text-primary">--</div>
+                                    <p class="text-muted">信號強度 (0-100)</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <span id="adviceBadge" class="badge fs-4 pattern-badge">--</span>
+                                    <p class="text-muted mt-2">操作建議</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分析詳情 -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card signal-card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">📊 技術指標</h5>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="text-center p-3">
+                                        <div class="h4 text-info" id="rsRating">--</div>
+                                        <small class="text-muted">RS Rating</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="text-center p-3">
+                                        <div class="h4 text-warning" id="rsiValue">--</div>
+                                        <small class="text-muted">RSI</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card signal-card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">🎯 形態識別</h5>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>VCP 形態:</span>
+                                    <span id="vcpStatus" class="badge bg-secondary">--</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Cup & Handle:</span>
+                                    <span id="cupHandleStatus" class="badge bg-secondary">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 價格圖表 -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card signal-card">
+                        <div class="card-body">
+                            <h5 class="card-title">📈 價格走勢圖</h5>
+                            <div id="priceChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 錯誤提示 -->
+        <div id="errorAlert" class="alert alert-danger" style="display: none;" role="alert">
+            <strong>錯誤!</strong> <span id="errorMessage"></span>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // 單股分析
-        async function analyzeSingleStock() {
-            const symbol = document.getElementById('singleStock').value.trim().toUpperCase();
-            if (!symbol) {
-                alert('請輸入股票代號');
-                return;
+        class StockAnalyzer {
+            constructor() {
+                this.initializeEventListeners();
             }
 
-            const loading = document.getElementById('singleLoading');
-            const result = document.getElementById('singleResult');
-            
-            loading.style.display = 'block';
-            result.style.display = 'none';
+            initializeEventListeners() {
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                const tickerInput = document.getElementById('tickerInput');
 
-            try {
-                const response = await fetch('/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: symbol })
+                analyzeBtn.addEventListener('click', () => this.analyzeStock());
+                tickerInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.analyzeStock();
+                    }
                 });
+            }
 
-                const data = await response.json();
-                loading.style.display = 'none';
-
-                if (data.error) {
-                    result.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-                } else {
-                    displaySingleResult(data);
-                }
+            async analyzeStock() {
+                const ticker = document.getElementById('tickerInput').value.trim();
                 
-                result.style.display = 'block';
-
-            } catch (error) {
-                loading.style.display = 'none';
-                result.innerHTML = `<div class="alert alert-danger">分析錯誤: ${error.message}</div>`;
-                result.style.display = 'block';
-            }
-        }
-
-        // 批量選股
-        async function screenStocks() {
-            const stockList = document.getElementById('stockList').value.trim();
-            if (!stockList) {
-                alert('請輸入股票列表');
-                return;
-            }
-
-            const symbols = stockList.split(',').map(s => s.trim().toUpperCase());
-            const loading = document.getElementById('screenLoading');
-            const result = document.getElementById('screenResult');
-            
-            loading.style.display = 'block';
-            result.style.display = 'none';
-
-            try {
-                const response = await fetch('/screen', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbols: symbols })
-                });
-
-                const data = await response.json();
-                loading.style.display = 'none';
-
-                if (data.error) {
-                    result.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-                } else {
-                    displayScreenResult(data);
+                if (!ticker) {
+                    this.showError('請輸入股票代號');
+                    return;
                 }
+
+                this.setLoading(true);
+                this.hideError();
+                this.hideResults();
+
+                try {
+                    const response = await fetch('/signal/generate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ ticker: ticker })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.displayResults(data);
+                    } else {
+                        this.showError(data.error || '分析失敗');
+                    }
+                } catch (error) {
+                    this.showError('網絡錯誤，請稍後再試');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            displayResults(data) {
+                // 更新信號評分
+                document.getElementById('scoreDisplay').textContent = data.final_score;
                 
-                result.style.display = 'block';
+                const adviceBadge = document.getElementById('adviceBadge');
+                adviceBadge.textContent = data.advice;
+                adviceBadge.className = `badge fs-4 pattern-badge bg-${data.advice_color}`;
 
-            } catch (error) {
-                loading.style.display = 'none';
-                result.innerHTML = `<div class="alert alert-danger">選股錯誤: ${error.message}</div>`;
-                result.style.display = 'block';
+                // 更新技術指標
+                document.getElementById('rsRating').textContent = data.rs_rating;
+                document.getElementById('rsiValue').textContent = data.rsi;
+
+                // 更新形態識別
+                const vcpStatus = document.getElementById('vcpStatus');
+                vcpStatus.textContent = data.vcp_status;
+                vcpStatus.className = `badge ${data.vcp_detected ? 'bg-success' : 'bg-secondary'}`;
+
+                const cupHandleStatus = document.getElementById('cupHandleStatus');
+                cupHandleStatus.textContent = data.cup_handle_status;
+                cupHandleStatus.className = `badge ${data.cup_handle_detected ? 'bg-success' : 'bg-secondary'}`;
+
+                // 繪製圖表
+                this.drawChart(data.chart_data, data.ticker);
+
+                // 顯示結果
+                this.showResults();
+            }
+
+            drawChart(chartData, ticker) {
+                if (!chartData || !chartData.dates) {
+                    return;
+                }
+
+                const candlestickTrace = {
+                    x: chartData.dates,
+                    open: chartData.open,
+                    high: chartData.high,
+                    low: chartData.low,
+                    close: chartData.close,
+                    type: 'candlestick',
+                    name: ticker,
+                    increasing: { line: { color: '#00ff00' } },
+                    decreasing: { line: { color: '#ff0000' } }
+                };
+
+                const ma20Trace = {
+                    x: chartData.dates,
+                    y: chartData.ma20,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'MA20',
+                    line: { color: '#1f77b4', width: 2 }
+                };
+
+                const layout = {
+                    title: `${ticker} 股價走勢 (最近6個月)`,
+                    xaxis: { title: '日期' },
+                    yaxis: { title: '價格 ($)' },
+                    showlegend: true,
+                    height: 450
+                };
+
+                Plotly.newPlot('priceChart', [candlestickTrace, ma20Trace], layout);
+            }
+
+            setLoading(isLoading) {
+                const analyzeText = document.querySelector('.analyze-text');
+                const loadingSpinner = document.querySelector('.loading');
+                const analyzeBtn = document.getElementById('analyzeBtn');
+
+                if (isLoading) {
+                    analyzeText.style.display = 'none';
+                    loadingSpinner.style.display = 'inline-block';
+                    analyzeBtn.disabled = true;
+                } else {
+                    analyzeText.style.display = 'inline';
+                    loadingSpinner.style.display = 'none';
+                    analyzeBtn.disabled = false;
+                }
+            }
+
+            showResults() {
+                document.getElementById('resultsSection').style.display = 'block';
+            }
+
+            hideResults() {
+                document.getElementById('resultsSection').style.display = 'none';
+            }
+
+            showError(message) {
+                document.getElementById('errorMessage').textContent = message;
+                document.getElementById('errorAlert').style.display = 'block';
+            }
+
+            hideError() {
+                document.getElementById('errorAlert').style.display = 'none';
             }
         }
 
-        // 顯示單股分析結果
-        function displaySingleResult(data) {
-            const score = data.score;
-            const rs = data.rs_rating;
-            
-            let gradeColor = 'success';
-            if (score.grade === 'D' || score.grade === 'C') gradeColor = 'danger';
-            else if (score.grade === 'B' || score.grade === 'B+') gradeColor = 'warning';
-
-            const html = `
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5>${data.symbol}</h5>
-                        <span class="badge bg-${gradeColor} score-badge">${score.total_score}/100 (${score.grade})</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p><strong>當前價格:</strong> $${data.current_price.toFixed(2)}</p>
-                                <p><strong>操作建議:</strong> <span class="badge bg-info">${score.action}</span></p>
-                                <p><strong>RS Rating:</strong> ${rs.rs_rating} (${rs.interpretation})</p>
-                            </div>
-                            <div class="col-md-6">
-                                <h6>評分明細:</h6>
-                                <ul class="list-unstyled">
-                                    <li>RS Rating: ${score.breakdown.rs_rating.toFixed(1)}</li>
-                                    <li>技術指標: ${score.breakdown.technical.toFixed(1)}</li>
-                                    <li>形態識別: ${score.breakdown.pattern.toFixed(1)}</li>
-                                    <li>動量指標: ${score.breakdown.momentum.toFixed(1)}</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('singleResult').innerHTML = html;
-
-            // 顯示圖表
-            if (data.charts) {
-                displayCharts(data.charts, data.symbol);
-            }
-        }
-
-        // 顯示批量選股結果
-        function displayScreenResult(data) {
-            const results = data.results;
-            const summary = data.summary;
-
-            let html = `
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h5>選股摘要</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row text-center">
-                            <div class="col-md-4">
-                                <h4>${summary.total_stocks}</h4>
-                                <p>分析股票數</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h4>${summary.avg_score.toFixed(1)}</h4>
-                                <p>平均評分</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h4>${summary.top_pick || 'N/A'}</h4>
-                                <p>首選標的</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h5>選股結果排名</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-dark table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>排名</th>
-                                        <th>股票</th>
-                                        <th>評分</th>
-                                        <th>等級</th>
-                                        <th>建議</th>
-                                        <th>RS Rating</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-            `;
-
-            results.forEach((stock, index) => {
-                const score = stock.score;
-                const rs = stock.rs_rating;
-                let gradeColor = 'success';
-                if (score.grade === 'D' || score.grade === 'C') gradeColor = 'danger';
-                else if (score.grade === 'B' || score.grade === 'B+') gradeColor = 'warning';
-
-                html += `
-                    <tr>
-                        <td>${index + 1}</td>
-                        <td><strong>${stock.symbol}</strong></td>
-                        <td>${score.total_score.toFixed(1)}</td>
-                        <td><span class="badge bg-${gradeColor}">${score.grade}</span></td>
-                        <td><span class="badge bg-info">${score.action}</span></td>
-                        <td>${rs.rs_rating}</td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('screenResult').innerHTML = html;
-
-            // 顯示投資組合圖表
-            if (data.portfolio_chart) {
-                displayPortfolioChart(data.portfolio_chart);
-            }
-        }
-
-        // 顯示圖表
-        function displayCharts(charts, symbol) {
-            const container = document.getElementById('chartsContainer');
-            
-            let html = `<h3 class="text-center mb-4">${symbol} 技術分析圖表</h3>`;
-            
-            if (charts.price_chart) {
-                html += `<div class="chart-container"><div id="priceChart"></div></div>`;
-            }
-            
-            if (charts.technical_chart) {
-                html += `<div class="chart-container"><div id="technicalChart"></div></div>`;
-            }
-            
-            container.innerHTML = html;
-
-            // 渲染圖表
-            if (charts.price_chart) {
-                Plotly.newPlot('priceChart', JSON.parse(charts.price_chart).data, JSON.parse(charts.price_chart).layout);
-            }
-            
-            if (charts.technical_chart) {
-                Plotly.newPlot('technicalChart', JSON.parse(charts.technical_chart).data, JSON.parse(charts.technical_chart).layout);
-            }
-        }
-
-        // 顯示投資組合圖表
-        function displayPortfolioChart(chartData) {
-            const container = document.getElementById('chartsContainer');
-            container.innerHTML = `
-                <h3 class="text-center mb-4">投資組合分析</h3>
-                <div class="chart-container">
-                    <div id="portfolioChart"></div>
-                </div>
-            `;
-            
-            Plotly.newPlot('portfolioChart', JSON.parse(chartData).data, JSON.parse(chartData).layout);
-        }
-
-        // 平滑滾動
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
-                    behavior: 'smooth'
-                });
-            });
+        // 初始化應用
+        document.addEventListener('DOMContentLoaded', () => {
+            new StockAnalyzer();
         });
     </script>
 </body>

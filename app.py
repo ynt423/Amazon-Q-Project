@@ -1,258 +1,223 @@
-#!/usr/bin/env python3
-"""
-Fintech Evolution - 跨鏈投資組合管理平台 Web版
-Flask + Plotly 可視化界面
-"""
-
 from flask import Flask, render_template, request, jsonify
-import plotly.graph_objs as go
-import plotly.utils
-import json
-import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta
+import pandas as pd
 import numpy as np
-from testing_fixed import FinTechMVP, TechnicalAnalyzer, PatternRecognizer, RSRatingCalculator, StockScorer
+from datetime import datetime, timedelta
+import json
 
 app = Flask(__name__)
-app.secret_key = 'fintech_evolution_2024'
 
-# 初始化分析引擎
-fintech_engine = FinTechMVP()
+class GrowthSignalGenerator:
+    def __init__(self):
+        self.sp500_ticker = "^GSPC"
+    
+    def get_stock_data(self, ticker, period="1y"):
+        """獲取股票數據"""
+        try:
+            stock = yf.Ticker(ticker)
+            data = stock.history(period=period)
+            return data
+        except Exception as e:
+            return None
+    
+    def calculate_rs_rating(self, ticker):
+        """計算RS Rating (相對強度評級)"""
+        try:
+            # 獲取股票和S&P 500數據
+            stock_data = self.get_stock_data(ticker, "6mo")
+            sp500_data = self.get_stock_data(self.sp500_ticker, "6mo")
+            
+            if stock_data is None or sp500_data is None or len(stock_data) < 2 or len(sp500_data) < 2:
+                return 50
+            
+            # 計算6個月價格變化
+            stock_return = (stock_data['Close'].iloc[-1] / stock_data['Close'].iloc[0] - 1) * 100
+            sp500_return = (sp500_data['Close'].iloc[-1] / sp500_data['Close'].iloc[0] - 1) * 100
+            
+            # 相對表現
+            relative_performance = stock_return - sp500_return
+            
+            # 轉換為1-99評級 (簡化算法)
+            rs_rating = max(1, min(99, int(50 + relative_performance * 2)))
+            
+            return rs_rating
+        except:
+            return 50
+    
+    def calculate_rsi(self, data, period=14):
+        """計算RSI指標"""
+        try:
+            delta = data['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            return rsi.iloc[-1]
+        except:
+            return 50
+    
+    def detect_vcp_pattern(self, data):
+        """檢測VCP (Volatility Contraction Pattern) 形態"""
+        try:
+            if len(data) < 60:  # 需要至少3個月數據
+                return False, "數據不足"
+            
+            # 取最近3個月數據
+            recent_data = data.tail(60)
+            
+            # 計算波動率 (使用20日滾動標準差)
+            volatility = recent_data['Close'].rolling(window=20).std()
+            
+            # 檢查波動率是否呈收縮趨勢
+            vol_trend = volatility.tail(40)
+            
+            # 簡化邏輯：檢查最近的波動率是否小於前期
+            if len(vol_trend) >= 20:
+                recent_vol = vol_trend.tail(10).mean()
+                earlier_vol = vol_trend.head(10).mean()
+                
+                if recent_vol < earlier_vol * 0.7:  # 波動率收縮30%以上
+                    return True, "潛在突破中"
+            
+            return False, "未發現"
+        except:
+            return False, "分析失敗"
+    
+    def detect_cup_handle_pattern(self, data):
+        """檢測Cup and Handle形態"""
+        try:
+            if len(data) < 120:  # 需要至少6個月數據
+                return False, "數據不足"
+            
+            # 取最近6個月數據
+            recent_data = data.tail(120)
+            prices = recent_data['Close']
+            
+            # 尋找最高點和最低點
+            max_price = prices.max()
+            min_price = prices.min()
+            
+            # 檢查是否形成U形底部
+            max_idx = prices.idxmax()
+            min_idx = prices.idxmin()
+            
+            # 簡化邏輯：檢查價格是否從低點回升
+            if min_idx < max_idx:  # 最低點在最高點之前
+                recent_price = prices.iloc[-1]
+                recovery_ratio = (recent_price - min_price) / (max_price - min_price)
+                
+                if recovery_ratio > 0.6:  # 已回升60%以上
+                    return True, "突破在即"
+            
+            return False, "未發現"
+        except:
+            return False, "分析失敗"
+    
+    def generate_signal(self, ticker):
+        """生成綜合信號"""
+        try:
+            # 獲取數據
+            data = self.get_stock_data(ticker, "1y")
+            if data is None or len(data) < 30:
+                return {
+                    "error": "無法獲取股票數據或數據不足",
+                    "ticker": ticker
+                }
+            
+            # 計算各項指標
+            rs_rating = self.calculate_rs_rating(ticker)
+            rsi = self.calculate_rsi(data)
+            vcp_detected, vcp_status = self.detect_vcp_pattern(data)
+            cup_handle_detected, cup_handle_status = self.detect_cup_handle_pattern(data)
+            
+            # 計算基礎分數
+            base_score = (rs_rating * 0.5) + ((100 - abs(rsi - 50)) * 2 * 0.5)
+            
+            # 形態獎勵
+            pattern_bonus = 0
+            if vcp_detected:
+                pattern_bonus += 10
+            if cup_handle_detected:
+                pattern_bonus += 8
+            
+            # 最終分數
+            final_score = min(100, base_score + pattern_bonus)
+            
+            # 操作建議
+            if final_score >= 80:
+                advice = "Strong Buy"
+                advice_color = "success"
+            elif final_score >= 60:
+                advice = "Hold"
+                advice_color = "warning"
+            else:
+                advice = "Avoid"
+                advice_color = "danger"
+            
+            # 準備圖表數據
+            chart_data = self.prepare_chart_data(data.tail(120))  # 最近6個月
+            
+            return {
+                "ticker": ticker.upper(),
+                "final_score": round(final_score, 1),
+                "advice": advice,
+                "advice_color": advice_color,
+                "rs_rating": rs_rating,
+                "rsi": round(rsi, 1),
+                "vcp_detected": vcp_detected,
+                "vcp_status": vcp_status,
+                "cup_handle_detected": cup_handle_detected,
+                "cup_handle_status": cup_handle_status,
+                "chart_data": chart_data,
+                "success": True
+            }
+        except Exception as e:
+            return {
+                "error": f"分析過程中發生錯誤: {str(e)}",
+                "ticker": ticker,
+                "success": False
+            }
+    
+    def prepare_chart_data(self, data):
+        """準備圖表數據"""
+        try:
+            # 創建數據副本並計算MA20
+            data = data.copy()
+            data['MA20'] = data['Close'].rolling(window=20).mean()
+            
+            chart_data = {
+                "dates": [d.strftime('%Y-%m-%d') for d in data.index],
+                "open": data['Open'].tolist(),
+                "high": data['High'].tolist(),
+                "low": data['Low'].tolist(),
+                "close": data['Close'].tolist(),
+                "ma20": data['MA20'].tolist()
+            }
+            return chart_data
+        except:
+            return {}
 
-class WebVisualizer:
-    """Web可視化組件"""
-    
-    @staticmethod
-    def create_price_chart(symbol: str, period: str = '6mo'):
-        """創建價格走勢圖"""
-        try:
-            data = yf.download(symbol, period=period, progress=False)
-            if data.empty:
-                return None
-            
-            # 計算移動平均線
-            data['MA20'] = data['Close'].rolling(20).mean()
-            data['MA50'] = data['Close'].rolling(50).mean()
-            
-            fig = go.Figure()
-            
-            # K線圖
-            fig.add_trace(go.Candlestick(
-                x=data.index,
-                open=data['Open'],
-                high=data['High'],
-                low=data['Low'],
-                close=data['Close'],
-                name=symbol,
-                increasing_line_color='#00ff88',
-                decreasing_line_color='#ff4444'
-            ))
-            
-            # 移動平均線
-            fig.add_trace(go.Scatter(
-                x=data.index, y=data['MA20'],
-                name='MA20', line=dict(color='orange', width=1)
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=data.index, y=data['MA50'],
-                name='MA50', line=dict(color='blue', width=1)
-            ))
-            
-            fig.update_layout(
-                title=f'{symbol} 價格走勢圖',
-                xaxis_title='日期',
-                yaxis_title='價格 ($)',
-                template='plotly_dark',
-                height=400,
-                showlegend=True
-            )
-            
-            return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-            
-        except Exception as e:
-            print(f"圖表創建錯誤: {e}")
-            return None
-    
-    @staticmethod
-    def create_technical_indicators_chart(symbol: str):
-        """創建技術指標圖表"""
-        try:
-            data = yf.download(symbol, period='6mo', progress=False)
-            if data.empty:
-                return None
-            
-            # 計算技術指標
-            analyzer = TechnicalAnalyzer()
-            
-            # MACD
-            macd_data = []
-            rsi_data = []
-            
-            for i in range(26, len(data)):
-                prices = data['Close'].iloc[:i+1]
-                macd = analyzer.calculate_macd(prices)
-                rsi = analyzer.calculate_rsi(prices)
-                
-                macd_data.append({
-                    'date': data.index[i],
-                    'macd': macd['macd'],
-                    'signal': macd['signal'],
-                    'histogram': macd['histogram']
-                })
-                
-                rsi_data.append({
-                    'date': data.index[i],
-                    'rsi': rsi
-                })
-            
-            # 創建子圖
-            from plotly.subplots import make_subplots
-            
-            fig = make_subplots(
-                rows=2, cols=1,
-                subplot_titles=('MACD', 'RSI'),
-                vertical_spacing=0.1
-            )
-            
-            # MACD圖
-            macd_df = pd.DataFrame(macd_data)
-            fig.add_trace(go.Scatter(
-                x=macd_df['date'], y=macd_df['macd'],
-                name='MACD', line=dict(color='blue')
-            ), row=1, col=1)
-            
-            fig.add_trace(go.Scatter(
-                x=macd_df['date'], y=macd_df['signal'],
-                name='Signal', line=dict(color='red')
-            ), row=1, col=1)
-            
-            fig.add_trace(go.Bar(
-                x=macd_df['date'], y=macd_df['histogram'],
-                name='Histogram', marker_color='gray'
-            ), row=1, col=1)
-            
-            # RSI圖
-            rsi_df = pd.DataFrame(rsi_data)
-            fig.add_trace(go.Scatter(
-                x=rsi_df['date'], y=rsi_df['rsi'],
-                name='RSI', line=dict(color='purple')
-            ), row=2, col=1)
-            
-            # RSI超買超賣線
-            fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-            
-            fig.update_layout(
-                title=f'{symbol} 技術指標',
-                template='plotly_dark',
-                height=500,
-                showlegend=True
-            )
-            
-            return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-            
-        except Exception as e:
-            print(f"技術指標圖表錯誤: {e}")
-            return None
-    
-    @staticmethod
-    def create_portfolio_pie_chart(portfolio_data):
-        """創建投資組合餅圖"""
-        if not portfolio_data:
-            return None
-        
-        symbols = [item['symbol'] for item in portfolio_data]
-        values = [item['score']['total_score'] for item in portfolio_data]
-        
-        fig = go.Figure(data=[go.Pie(
-            labels=symbols,
-            values=values,
-            hole=0.3,
-            textinfo='label+percent',
-            textfont_size=12,
-            marker=dict(colors=['#ff9999', '#66b3ff', '#99ff99', '#ffcc99', '#ff99cc'])
-        )])
-        
-        fig.update_layout(
-            title="投資組合評分分布",
-            template='plotly_dark',
-            height=400
-        )
-        
-        return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+# 初始化信號生成器
+signal_generator = GrowthSignalGenerator()
 
 @app.route('/')
 def index():
-    """主頁面"""
     return render_template('index.html')
 
-@app.route('/analyze', methods=['POST'])
-def analyze_stock():
-    """股票分析API"""
+@app.route('/signal/generate', methods=['POST'])
+def generate_signal():
     try:
         data = request.get_json()
-        symbol = data.get('symbol', '').upper()
+        ticker = data.get('ticker', '').strip().upper()
         
-        if not symbol:
-            return jsonify({'error': '請輸入股票代號'})
+        if not ticker:
+            return jsonify({"error": "請輸入股票代號", "success": False})
         
-        # 執行分析
-        analysis = fintech_engine.analyze_stock(symbol)
-        
-        if 'error' in analysis:
-            return jsonify(analysis)
-        
-        # 生成圖表
-        visualizer = WebVisualizer()
-        price_chart = visualizer.create_price_chart(symbol)
-        tech_chart = visualizer.create_technical_indicators_chart(symbol)
-        
-        analysis['charts'] = {
-            'price_chart': price_chart,
-            'technical_chart': tech_chart
-        }
-        
-        return jsonify(analysis)
-        
+        result = signal_generator.generate_signal(ticker)
+        return jsonify(result)
+    
     except Exception as e:
-        return jsonify({'error': f'分析錯誤: {str(e)}'})
-
-@app.route('/screen', methods=['POST'])
-def screen_stocks():
-    """批量選股API"""
-    try:
-        data = request.get_json()
-        symbols = data.get('symbols', [])
-        
-        if not symbols:
-            return jsonify({'error': '請輸入股票代號列表'})
-        
-        # 執行批量分析
-        results = fintech_engine.screen_stocks(symbols)
-        
-        # 生成投資組合圖表
-        visualizer = WebVisualizer()
-        portfolio_chart = visualizer.create_portfolio_pie_chart(results)
-        
-        return jsonify({
-            'results': results,
-            'portfolio_chart': portfolio_chart,
-            'summary': {
-                'total_stocks': len(results),
-                'avg_score': sum(r['score']['total_score'] for r in results) / len(results) if results else 0,
-                'top_pick': results[0]['symbol'] if results else None
-            }
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'選股錯誤: {str(e)}'})
-
-@app.route('/dashboard')
-def dashboard():
-    """儀表板頁面"""
-    return render_template('dashboard.html')
+        return jsonify({"error": f"服務器錯誤: {str(e)}", "success": False})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, port=5000)
