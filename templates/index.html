@@ -182,7 +182,12 @@
                         body: JSON.stringify({ ticker: ticker })
                     });
 
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
                     const data = await response.json();
+                    console.log('Response data:', data);  // 調試信息
 
                     if (data.success) {
                         this.displayResults(data);
@@ -190,7 +195,8 @@
                         this.showError(data.error || '分析失敗');
                     }
                 } catch (error) {
-                    this.showError('網絡錯誤，請稍後再試');
+                    console.error('Error:', error);  // 調試信息
+                    this.showError(`錯誤: ${error.message}`);
                 } finally {
                     this.setLoading(false);
                 }

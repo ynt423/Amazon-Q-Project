@@ -37,11 +37,23 @@ class GrowthSignalGenerator:
             # 相對表現
             relative_performance = stock_return - sp500_return
             
-            # 轉換為1-99評級 (簡化算法)
-            rs_rating = max(1, min(99, int(50 + relative_performance * 2)))
+            print(f"股票回報: {stock_return:.2f}%, S&P500回報: {sp500_return:.2f}%, 相對表現: {relative_performance:.2f}%")
             
-            return rs_rating
-        except:
+            # 改進的RS Rating算法
+            if relative_performance >= 20:
+                rs_rating = 90 + min(9, relative_performance - 20) // 5
+            elif relative_performance >= 10:
+                rs_rating = 80 + (relative_performance - 10)
+            elif relative_performance >= 0:
+                rs_rating = 60 + (relative_performance * 2)
+            elif relative_performance >= -10:
+                rs_rating = 40 + (relative_performance + 10) * 2
+            else:
+                rs_rating = max(1, 40 + relative_performance + 10)
+            
+            return max(1, min(99, int(rs_rating)))
+        except Exception as e:
+            print(f"RS Rating計算錯誤: {e}")
             return 50
     
     def calculate_rsi(self, data, period=14):
@@ -52,7 +64,8 @@ class GrowthSignalGenerator:
             loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
             rs = gain / loss
             rsi = 100 - (100 / (1 + rs))
-            return rsi.iloc[-1]
+            rsi_value = rsi.iloc[-1]
+            return 50 if pd.isna(rsi_value) else float(rsi_value)
         except:
             return 50
     
@@ -116,12 +129,14 @@ class GrowthSignalGenerator:
     def generate_signal(self, ticker):
         """生成綜合信號"""
         try:
+            print(f"開始獲取 {ticker} 的數據...")  # 調試信息
             # 獲取數據
             data = self.get_stock_data(ticker, "1y")
             if data is None or len(data) < 30:
                 return {
                     "error": "無法獲取股票數據或數據不足",
-                    "ticker": ticker
+                    "ticker": ticker,
+                    "success": False
                 }
             
             # 計算各項指標
@@ -130,8 +145,23 @@ class GrowthSignalGenerator:
             vcp_detected, vcp_status = self.detect_vcp_pattern(data)
             cup_handle_detected, cup_handle_status = self.detect_cup_handle_pattern(data)
             
-            # 計算基礎分數
-            base_score = (rs_rating * 0.5) + ((100 - abs(rsi - 50)) * 2 * 0.5)
+            # 調試信息
+            print(f"RS Rating: {rs_rating}, RSI: {rsi}")
+            print(f"VCP: {vcp_detected}, Cup&Handle: {cup_handle_detected}")
+            
+            # 修正評分算法
+            # RS Rating 權重 50%
+            rs_score = rs_rating * 0.5
+            
+            # RSI 權重 50% (RSI在30-70之間得分較高)
+            if 30 <= rsi <= 70:
+                rsi_score = 50 - abs(rsi - 50)  # RSI接近50分數最高
+            elif rsi > 70:
+                rsi_score = max(0, 50 - (rsi - 70) * 2)  # 超買懲罰
+            else:
+                rsi_score = max(0, 50 - (30 - rsi) * 2)  # 超賣懲罰
+            
+            base_score = rs_score + rsi_score
             
             # 形態獎勵
             pattern_bonus = 0
@@ -141,7 +171,9 @@ class GrowthSignalGenerator:
                 pattern_bonus += 8
             
             # 最終分數
-            final_score = min(100, base_score + pattern_bonus)
+            final_score = min(100, max(0, base_score + pattern_bonus))
+            
+            print(f"基礎分數: {base_score}, 形態獎勵: {pattern_bonus}, 最終分數: {final_score}")
             
             # 操作建議
             if final_score >= 80:
@@ -172,6 +204,7 @@ class GrowthSignalGenerator:
                 "success": True
             }
         except Exception as e:
+            print(f"分析錯誤: {str(e)}")  # 調試信息
             return {
                 "error": f"分析過程中發生錯誤: {str(e)}",
                 "ticker": ticker,
@@ -185,16 +218,18 @@ class GrowthSignalGenerator:
             data = data.copy()
             data['MA20'] = data['Close'].rolling(window=20).mean()
             
+            # 處理NaN值
             chart_data = {
                 "dates": [d.strftime('%Y-%m-%d') for d in data.index],
-                "open": data['Open'].tolist(),
-                "high": data['High'].tolist(),
-                "low": data['Low'].tolist(),
-                "close": data['Close'].tolist(),
-                "ma20": data['MA20'].tolist()
+                "open": [None if pd.isna(x) else float(x) for x in data['Open']],
+                "high": [None if pd.isna(x) else float(x) for x in data['High']],
+                "low": [None if pd.isna(x) else float(x) for x in data['Low']],
+                "close": [None if pd.isna(x) else float(x) for x in data['Close']],
+                "ma20": [None if pd.isna(x) else float(x) for x in data['MA20']]
             }
             return chart_data
-        except:
+        except Exception as e:
+            print(f"圖表數據準備錯誤: {e}")
             return {}
 
 # 初始化信號生成器
@@ -208,15 +243,22 @@ def index():
 def generate_signal():
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "無效的請求數據", "success": False})
+            
         ticker = data.get('ticker', '').strip().upper()
         
         if not ticker:
             return jsonify({"error": "請輸入股票代號", "success": False})
         
+        print(f"正在分析股票: {ticker}")  # 調試信息
         result = signal_generator.generate_signal(ticker)
+        print(f"分析結果: {result.get('success', False)}")  # 調試信息
+        
         return jsonify(result)
     
     except Exception as e:
+        print(f"服務器錯誤: {str(e)}")  # 調試信息
         return jsonify({"error": f"服務器錯誤: {str(e)}", "success": False})
 
 if __name__ == '__main__':
