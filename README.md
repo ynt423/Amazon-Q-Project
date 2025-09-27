@@ -1,6 +1,6 @@
-# 🚀 VCP & RS Fusion: AI-Enhanced Stock Analysis System
+# 🚀 AI-Enhanced Growth Stock Analysis System
 
-🎯 **基於 William O'Neil 和 Mark Minervini 成長股分析哲學的智能股票分析系統**
+🧠 **基於 William O'Neil 和 Mark Minervini 哲學的智能股票分析平台**
 
 ## 📋 系統概述
 
