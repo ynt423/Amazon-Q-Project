@@ -1,4 +1,36 @@
-Flask==2.3.3
-yfinance==0.2.18
-pandas==2.0.3
-numpy==1.24.3
+# Core Flask and Web Framework
+Flask==3.1.2
+Werkzeug==3.1.3
+
+# Data Processing and Analysis
+pandas==2.3.2
+numpy==2.3.3
+yfinance
+feedparser==0.2.66
+
+# Database
+peewee==3.18.2
+
+# Scheduling
+schedule==1.2.0
+
+# HTTP Requests
+requests==2.32.5
+httpx==0.28.1
+
+# Environment Variables
+python-dotenv==1.1.1
+
+# AI and OpenAI Integration
+openai==1.109.1
+
+# Web Scraping and News
+beautifulsoup4==4.13.5
+curl-cffi==0.13.0
+
+# Async Support
+anyio==4.11.0
+
+# Utilities
+tqdm==4.67.1
+distro==1.9.0

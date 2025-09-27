@@ -22,9 +22,21 @@
         .loading {
             display: none;
         }
+        .ai-loading {
+            display: none;
+        }
         .chart-container {
-            height: 500px;
-            margin: 20px 0;
+            height: 400px;
+            margin: 15px 0;
+            padding-top: 15px;
+            width: 100%;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        
+        .chart-container .plotly {
+            width: 100% !important;
+            height: 100% !important;
         }
     </style>
 </head>
@@ -37,19 +49,86 @@
             <p class="text-secondary">基於 William O'Neil 和 Mark Minervini 成長股分析哲學</p>
         </div>
 
+        <!-- 推薦股票區域 -->
+        {% if recommended_stocks %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card signal-card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-star text-warning me-2"></i>
+                            今日推薦形態股
+                        </h5>
+                        <div class="row">
+                            {% for stock in recommended_stocks %}
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="card h-100 stock-card" onclick="quickAnalyze('{{ stock.ticker }}')" style="cursor: pointer;">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">{{ stock.ticker }}</h6>
+                                        <div class="h5 text-primary">${{ "%.2f"|format(stock.current_price) }}</div>
+                                        <span class="badge bg-{{ 'success' if stock.pattern_type == 'VCP' else 'primary' }} mb-2">
+                                            {{ stock.pattern_type }}
+                                        </span>
+                                        <div class="small text-muted">
+                                            信心度: {{ stock.confidence_score|int }}%<br>
+                                            風險: {{ '低' if stock.risk_score == 1 else '中' if stock.risk_score == 2 else '高' }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- 輸入區域 -->
         <div class="row justify-content-center mb-4">
-            <div class="col-md-6">
+            <div class="col-md-8">
                 <div class="card signal-card">
                     <div class="card-body p-4">
                         <h5 class="card-title text-center mb-3">股票分析</h5>
+                        
+                        <!-- 時間軸選擇 -->
+                        <div class="mb-3">
+                            <label class="form-label">時間軸選擇</label>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn btn-outline-primary active" 
+                                        data-period="1y" onclick="selectTimeframe(this)">日線 (1年)</button>
+                                <button type="button" class="btn btn-outline-primary" 
+                                        data-period="5y" onclick="selectTimeframe(this)">週線 (5年)</button>
+                                <button type="button" class="btn btn-outline-primary" 
+                                        data-period="10y" onclick="selectTimeframe(this)">月線 (10年)</button>
+                            </div>
+                        </div>
+                        
                         <div class="input-group mb-3">
                             <input type="text" id="tickerInput" class="form-control form-control-lg" 
-                                   placeholder="輸入股票代號 (例如: TSLA, AAPL)" maxlength="10">
+                                   placeholder="輸入股票代號 (例如: TSLA, AAPL)" maxlength="10" list="stockSuggestions">
+                            <datalist id="stockSuggestions">
+                                {% for suggestion in suggestions %}
+                                <option value="{{ suggestion }}">
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        
+                        <!-- 生成分析按鈕 -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-center mb-4">
                             <button class="btn btn-primary btn-lg" type="button" id="analyzeBtn">
-                                <span class="analyze-text">生成信號</span>
+                                <span class="analyze-text">📊 生成分析</span>
                                 <span class="loading spinner-border spinner-border-sm" role="status"></span>
                             </button>
+                        </div>
+                        
+                        <!-- 快速分析按鈕 -->
+                        <div class="text-center">
+                            <small class="text-muted me-2">快速分析:</small>
+                            {% for suggestion in suggestions[:6] %}
+                            <button class="btn btn-outline-secondary btn-sm me-1" 
+                                    onclick="quickAnalyze('{{ suggestion }}')">{{ suggestion }}</button>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
@@ -64,14 +143,20 @@
                     <div class="card signal-card">
                         <div class="card-body text-center p-4">
                             <h5 class="card-title mb-3">綜合信號評分</h5>
-                            <div class="row">
+                            <div class="row align-items-center">
                                 <div class="col-md-6">
                                     <div id="scoreDisplay" class="score-display text-primary">--</div>
-                                    <p class="text-muted">信號強度 (0-100)</p>
                                 </div>
                                 <div class="col-md-6">
                                     <span id="adviceBadge" class="badge fs-4 pattern-badge">--</span>
-                                    <p class="text-muted mt-2">操作建議</p>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-0">信號強度 (0-100)</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-0">操作建議</p>
                                 </div>
                             </div>
                         </div>
@@ -123,13 +208,62 @@
                 </div>
             </div>
 
-            <!-- 價格圖表 -->
+            <!-- 價格圖表和風險管理建議並排顯示 -->
             <div class="row">
+                <div class="col-md-6">
+                    <div class="card signal-card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title mb-4">📈 價格走勢圖</h5>
+                            <div id="priceChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card signal-card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">🛡️ 風險管理建議</h5>
+                            <div id="riskManagementContent">
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>建議止損點:</span>
+                                        <span id="stopLossPrice" class="badge bg-danger">--</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>市場趨勢:</span>
+                                        <span id="marketTrend" class="badge bg-info">--</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>形態識別:</span>
+                                        <span id="patternSummary" class="badge bg-primary">--</span>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info">
+                                    <small>
+                                        <strong>風險提示:</strong><br>
+                                        • 止損點基於VCP低點或最近支撐位計算<br>
+                                        • 建議風險控制在總資金的2-3%<br>
+                                        • 形態識別僅供參考，不構成投資建議
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- AI 分析結果區域 -->
+            <div class="row mt-5 mb-4" id="aiAnalysisSection" style="display: none;">
                 <div class="col-12">
                     <div class="card signal-card">
                         <div class="card-body">
-                            <h5 class="card-title">📈 價格走勢圖</h5>
-                            <div id="priceChart" class="chart-container"></div>
+                            <h5 class="card-title">🧠 AI 分析結果</h5>
+                            <div id="aiAnalysisContent">
+                                <!-- AI 分析內容將在這裡顯示 -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -146,6 +280,8 @@
     <script>
         class StockAnalyzer {
             constructor() {
+                this.currentTimeframe = '1y';
+                this.currentTicker = '';
                 this.initializeEventListeners();
             }
 
@@ -162,37 +298,74 @@
             }
 
             async analyzeStock() {
-                const ticker = document.getElementById('tickerInput').value.trim();
+                const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
                 
                 if (!ticker) {
                     this.showError('請輸入股票代號');
                     return;
                 }
 
+                this.currentTicker = ticker;
                 this.setLoading(true);
                 this.hideError();
                 this.hideResults();
 
                 try {
-                    const response = await fetch('/signal/generate', {
+                    // 1. 先執行技術分析
+                    const technicalResponse = await fetch('/signal/generate', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ ticker: ticker })
+                        body: JSON.stringify({ 
+                            ticker: ticker,
+                            period: this.currentTimeframe
+                        })
                     });
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    if (!technicalResponse.ok) {
+                        throw new Error(`HTTP ${technicalResponse.status}: ${technicalResponse.statusText}`);
                     }
 
-                    const data = await response.json();
-                    console.log('Response data:', data);  // 調試信息
+                    const technicalData = await technicalResponse.json();
+                    console.log('技術分析數據:', technicalData);
 
-                    if (data.success) {
-                        this.displayResults(data);
+                    if (technicalData.success) {
+                        // 2. 執行 AI 分析
+                        const aiResponse = await fetch('/api/ai-analysis', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ 
+                                ticker: ticker,
+                                period: this.currentTimeframe
+                            })
+                        });
+
+                        if (aiResponse.ok) {
+                            const aiData = await aiResponse.json();
+                            console.log('AI分析數據:', aiData);
+                            
+                            // 3. 整合技術分析和AI分析結果
+                            const integratedData = {
+                                ...technicalData,
+                                ...aiData,
+                                integrated: true
+                            };
+                            
+                            this.displayResults(integratedData);
+                            this.displayAIResults(integratedData);
+                            
+                            // 4. 自動獲取止損建議
+                            await this.getStopLossAdvice();
+                        } else {
+                            // 如果AI分析失敗，只顯示技術分析
+                            this.displayResults(technicalData);
+                            await this.getStopLossAdvice();
+                        }
                     } else {
-                        this.showError(data.error || '分析失敗');
+                        this.showError(technicalData.error || '技術分析失敗');
                     }
                 } catch (error) {
                     console.error('Error:', error);  // 調試信息
@@ -222,6 +395,16 @@
                 const cupHandleStatus = document.getElementById('cupHandleStatus');
                 cupHandleStatus.textContent = data.cup_handle_status;
                 cupHandleStatus.className = `badge ${data.cup_handle_detected ? 'bg-success' : 'bg-secondary'}`;
+
+                // 更新風險管理建議
+                const stopLossPrice = document.getElementById('stopLossPrice');
+                stopLossPrice.textContent = data.recommended_stop_loss || 'N/A';
+                
+                const marketTrend = document.getElementById('marketTrend');
+                marketTrend.textContent = data.market_trend || 'N/A';
+                
+                const patternSummary = document.getElementById('patternSummary');
+                patternSummary.textContent = data.pattern_summary || '未發現形態';
 
                 // 繪製圖表
                 this.drawChart(data.chart_data, data.ticker);
@@ -257,11 +440,19 @@
                 };
 
                 const layout = {
-                    title: `${ticker} 股價走勢 (最近6個月)`,
+                    title: {
+                        text: `${ticker} 股價走勢 (最近6個月)`,
+                        x: 0.5,
+                        xanchor: 'center',
+                        font: { size: 16 }
+                    },
                     xaxis: { title: '日期' },
                     yaxis: { title: '價格 ($)' },
                     showlegend: true,
-                    height: 450
+                    height: 380,
+                    margin: { l: 50, r: 30, t: 80, b: 50 },
+                    autosize: true,
+                    responsive: true
                 };
 
                 Plotly.newPlot('priceChart', [candlestickTrace, ma20Trace], layout);
@@ -283,6 +474,8 @@
                 }
             }
 
+            // setAILoading 方法已移除，不再需要單獨的AI加載狀態
+
             showResults() {
                 document.getElementById('resultsSection').style.display = 'block';
             }
@@ -299,11 +492,219 @@
             hideError() {
                 document.getElementById('errorAlert').style.display = 'none';
             }
+
+            // 時間軸選擇
+            selectTimeframe(button) {
+                document.querySelectorAll('[data-period]').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                button.classList.add('active');
+                this.currentTimeframe = button.dataset.period;
+            }
+
+            // 獲取止損建議
+            async getStopLossAdvice() {
+                if (!this.currentTicker) {
+                    this.showError('請先分析一支股票');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/stop-loss/${this.currentTicker}`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.displayStopLossAdvice(data);
+                    } else {
+                        this.showError(data.error || '獲取止損建議失敗');
+                    }
+                } catch (error) {
+                    console.error('獲取止損建議失敗:', error);
+                    this.showError(`錯誤: ${error.message}`);
+                }
+            }
+
+            displayStopLossAdvice(data) {
+                let container = document.getElementById('stopLossContent');
+                if (!container) {
+                    // 如果沒有止損區域，創建一個
+                    const stopLossSection = document.createElement('div');
+                    stopLossSection.className = 'row mb-5 mt-4';
+                    stopLossSection.innerHTML = `
+                        <div class="col-12">
+                            <div class="card signal-card">
+                                <div class="card-body">
+                                    <h5 class="card-title">🛡️ 風險管理建議</h5>
+                                    <div id="stopLossContent"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('resultsSection').appendChild(stopLossSection);
+                    // 重新獲取容器元素
+                    container = document.getElementById('stopLossContent');
+                }
+
+                container.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <div class="h4 text-primary">$${data.current_price}</div>
+                                <small class="text-muted">當前價格</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <div class="h4 text-danger">$${data.suggested_stop_loss}</div>
+                                <small class="text-muted">建議止損</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <div class="h4 text-info">$${data.support_level}</div>
+                                <small class="text-muted">支撐位</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <div class="h4 text-warning">${data.risk_level}</div>
+                                <small class="text-muted">風險等級</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-info mt-3">
+                        <strong>建議:</strong> ${data.advice}
+                    </div>
+                `;
+            }
+
+            // performAIAnalysis 方法已移除，功能已整合到 analyzeStock 中
+
+            displayAIResults(data) {
+                const aiAnalysisSection = document.getElementById('aiAnalysisSection');
+                const aiAnalysisContent = document.getElementById('aiAnalysisContent');
+                
+                if (!aiAnalysisSection || !aiAnalysisContent) return;
+
+                let html = '';
+                
+                // AI 自然語言分析
+                if (data.ai_analysis && data.ai_analysis.natural_analysis) {
+                    html += `
+                        <div class="mb-4">
+                            <h6 class="text-primary mb-3">🧠 AI 深度分析</h6>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="ai-analysis-content" style="line-height: 1.8; font-size: 1.1em; word-wrap: break-word; max-height: none; overflow: visible;">
+                                        ${data.ai_analysis.natural_analysis}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (data.ai_enhanced && data.ai_enhanced.natural_analysis) {
+                    html += `
+                        <div class="mb-4">
+                            <h6 class="text-primary mb-3">🧠 AI 深度分析</h6>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="ai-analysis-content" style="line-height: 1.8; font-size: 1.1em; word-wrap: break-word; max-height: none; overflow: visible;">
+                                        ${data.ai_enhanced.natural_analysis}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // AI 評分和建議
+                if (data.ai_analysis || data.ai_enhanced) {
+                    const ai = data.ai_analysis || data.ai_enhanced || {};
+                    html += `
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <div class="h4 text-primary">${ai.ai_score || ai.score || data.final_score || 'N/A'}</div>
+                                    <small class="text-muted">AI 評分</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <div class="h4 text-success">${ai.confidence || 75}%</div>
+                                    <small class="text-muted">置信度</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <div class="h4 text-info">${ai.recommendation || data.advice || 'N/A'}</div>
+                                    <small class="text-muted">AI 建議</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <div class="h4 text-warning">${ai.timing_advice || '觀望'}</div>
+                                    <small class="text-muted">時機建議</small>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 新聞分析
+                if (data.news_analysis && data.news_analysis.articles) {
+                    html += `
+                        <div class="mb-4">
+                            <h6 class="text-primary">📰 最新新聞洞察</h6>
+                            <div class="row">
+                    `;
+                    
+                    data.news_analysis.articles.slice(0, 3).forEach((article, index) => {
+                        html += `
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">${article.title || 'N/A'}</h6>
+                                        <p class="card-text small">${(article.description || article.summary || '').substring(0, 100)}...</p>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">${article.source || 'Unknown'}</small>
+                                            ${article.url ? `<a href="${article.url}" target="_blank" class="btn btn-sm btn-outline-primary">閱讀</a>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // AI 洞察部分已移除，避免重複顯示
+
+                aiAnalysisContent.innerHTML = html;
+                aiAnalysisSection.style.display = 'block';
+            }
+        }
+
+        // 全域函數
+        function selectTimeframe(button) {
+            window.stockAnalyzer.selectTimeframe(button);
+        }
+
+        function quickAnalyze(ticker) {
+            document.getElementById('tickerInput').value = ticker;
+            window.stockAnalyzer.analyzeStock();
+        }
+
+        function getStopLossAdvice() {
+            window.stockAnalyzer.getStopLossAdvice();
         }
 
         // 初始化應用
         document.addEventListener('DOMContentLoaded', () => {
-            new StockAnalyzer();
+            window.stockAnalyzer = new StockAnalyzer();
         });
     </script>
 </body>

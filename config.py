@@ -4,7 +4,7 @@ import os
 
 # --- 系統設定 ---
 FLASK_DEBUG = True
-FLASK_PORT = 5000
+FLASK_PORT = 5001
 SP500_TICKER = "^GSPC"
 CACHE_TIMEOUT_SECONDS = 300  # 數據緩存時間 (5 分鐘)
 
