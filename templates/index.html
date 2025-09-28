@@ -294,6 +294,57 @@
                                     <p class="text-muted mb-0">操作建議</p>
                                 </div>
                             </div>
+                            
+                            <!-- 技術分析權重表 -->
+                            <div class="mt-4">
+                                <h6 class="text-info mb-3">📊 技術分析權重分配</h6>
+                                <div class="row">
+                                    <div class="col-md-2">
+                                        <div class="text-center">
+                                            <div class="h6 text-primary">20%</div>
+                                            <div class="small text-muted">RS評級</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="text-center">
+                                            <div class="h6 text-success">15%</div>
+                                            <div class="small text-muted">RSI</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="text-center">
+                                            <div class="h6 text-warning">15%</div>
+                                            <div class="small text-muted">MACD</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="text-center">
+                                            <div class="h6 text-info">10%</div>
+                                            <div class="small text-muted">布林通道</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="text-center">
+                                            <div class="h6 text-secondary">10%</div>
+                                            <div class="small text-muted">成交量</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="text-center">
+                                            <div class="h6 text-dark">10%</div>
+                                            <div class="small text-muted">形態獎勵</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-12">
+                                        <div class="text-center">
+                                            <div class="h6 text-danger">20%</div>
+                                            <div class="small text-muted">大盤趨勢過濾</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -761,13 +812,16 @@
                 
                 // AI 自然語言分析
                 if (data.ai_analysis && data.ai_analysis.natural_analysis) {
+                    // 格式化AI分析文本，按標題分段
+                    const formattedAnalysis = this.formatAIAnalysis(data.ai_analysis.natural_analysis);
+                    
                     html += `
                         <div class="mb-4">
                             <h6 class="text-primary mb-3">🧠 AI 深度分析</h6>
                             <div class="card">
                                 <div class="card-body">
                                     <div class="ai-analysis-content" style="line-height: 1.8; font-size: 1.1em; word-wrap: break-word; max-height: none; overflow: visible;">
-                                        ${data.ai_analysis.natural_analysis}
+                                        ${formattedAnalysis}
                                     </div>
                                 </div>
                             </div>
@@ -854,8 +908,68 @@
 
                 // AI 洞察部分已移除，避免重複顯示
 
+                // 添加AI分析權重表
+                html += `
+                    <div class="mb-4">
+                        <h6 class="text-info mb-3">📊 AI分析權重分配</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <div class="h5 text-primary">50%</div>
+                                            <div class="small text-muted">技術分析</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <div class="h5 text-success">20%</div>
+                                            <div class="small text-muted">新聞分析</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <div class="h5 text-warning">15%</div>
+                                            <div class="small text-muted">市場情緒</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <div class="h5 text-danger">15%</div>
+                                            <div class="small text-muted">風險評估</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
                 aiAnalysisContent.innerHTML = html;
                 aiAnalysisSection.style.display = 'block';
+            }
+
+            // 格式化AI分析文本，按標題分段
+            formatAIAnalysis(text) {
+                if (!text) return '';
+                
+                // 按標題分段處理
+                let formatted = text
+                    // 處理主要標題 (## 開頭)
+                    .replace(/##\s*(.+?)(?=\n|$)/g, '<h4 class="text-primary mt-4 mb-3">$1</h4>')
+                    // 處理副標題 (** 開頭)
+                    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-dark">$1</strong>')
+                    // 處理數字標題 (1. 2. 3. 開頭)
+                    .replace(/(\d+\.\s*[^<\n]+?)(?=\n|$)/g, '<h6 class="text-secondary mt-3 mb-2">$1</h6>')
+                    // 處理段落分隔
+                    .replace(/\n\n/g, '</p><p class="mb-3">')
+                    // 處理單行換行
+                    .replace(/\n/g, '<br>');
+                
+                // 包裝在段落標籤中
+                formatted = '<p class="mb-3">' + formatted + '</p>';
+                
+                return formatted;
             }
         }
 

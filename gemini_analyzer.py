@@ -89,6 +89,18 @@ class GeminiStockAnalyzer:
 - 分析置信度: {sentiment.get('confidence', 'N/A')}
 """
         
+        # 新增風險評估資訊
+        risk_info = ""
+        if news_analysis.get('risk_analysis'):
+            risk = news_analysis['risk_analysis']
+            risk_info = f"""
+風險評估：
+- 波動性風險: {risk.get('volatility_risk', 'N/A')}
+- 流動性風險: {risk.get('liquidity_risk', 'N/A')}
+- 相關性風險: {risk.get('correlation_risk', 'N/A')}
+- 整體風險等級: {risk.get('overall_risk', 'N/A')}
+"""
+        
         return f"""
 作為一個專業的股票分析師，請為 {ticker} 股票提供一份全面的投資分析報告。
 
@@ -100,43 +112,37 @@ class GeminiStockAnalyzer:
 - 形態識別: {technical_data.get('pattern_summary', 'N/A')}
 - 市場趨勢: {technical_data.get('market_trend', 'N/A')}
 - 建議止損: {technical_data.get('recommended_stop_loss', 'N/A')}
-{sentiment_info}{news_summary}
+{sentiment_info}{risk_info}{news_summary}
 
-請提供一份約10句話的自然語言分析報告，包含：
+請提供一份約12句話的綜合分析報告，包含以下維度：
 
+**分析維度權重分配**：
+- 技術分析 (50%)：RSI、MACD、形態識別等技術指標
+- 新聞分析 (20%)：最新新聞對股價的影響
+- 市場情緒 (15%)：投資者情緒和市場氛圍
+- 風險評估 (15%)：波動性、流動性、相關性風險
+
+**分析報告結構**：
 1. **開場總結**：基於技術指標的整體評估
-2. **技術分析**：RSI、MACD等指標的含義
-3. **形態分析**：VCP或Cup & Handle形態的意義
-4. **新聞影響**：引用具體新聞標題和影響
-5. **市場情緒**：當前市場對該股票的看法
-6. **風險因素**：主要風險點
-7. **機會分析**：潛在的上漲機會
+2. **技術分析**：RSI、MACD等指標的含義和信號
+3. **形態分析**：VCP或Cup & Handle形態的意義和突破概率
+4. **新聞影響**：引用具體新聞標題和對股價的影響
+5. **市場情緒**：當前市場對該股票的看法和投資者情緒
+6. **風險評估**：波動性、流動性、相關性等風險因素
+7. **機會分析**：潛在的上漲機會和催化劑
 8. **投資建議**：明確的買入/持有/賣出建議
 9. **時機建議**：最佳進場或出場時機
-10. **總結**：綜合評估和建議
-
-請使用專業但易懂的語言，並在適當的地方引用新聞來源。
-
-請直接提供自然語言分析報告，不要使用JSON格式。分析報告應包含：
-
-1. **開場總結**：基於技術指標的整體評估
-2. **技術分析**：RSI、MACD等指標的含義
-3. **形態分析**：VCP或Cup & Handle形態的意義
-4. **新聞影響**：引用具體新聞標題和影響，並註明新聞來源和可點擊的超連結
-5. **市場情緒**：當前市場對該股票的看法
-6. **風險因素**：主要風險點
-7. **機會分析**：潛在的上漲機會
-8. **投資建議**：明確的買入/持有/賣出建議
-9. **時機建議**：最佳進場或出場時機
-10. **總結**：綜合評估和建議
+10. **風險管理**：止損建議和風險控制措施
+11. **總結**：綜合評估和最終建議
 
 請確保：
-- 使用專業但易懂的語言
+- 使用專業但易懂的語言，不要使用任何emoji表情符號
 - 在適當的地方引用新聞來源，並使用HTML格式的超連結：<a href="URL" target="_blank">新聞標題</a>
 - 提供完整的分析，不要截斷文字
 - 每段分析都要有具體的數據支撐
 - 所有新聞連結都應該是可點擊的HTML格式
-- "news_sentiment": 新聞情緒分析
+- 明確標示各維度的分析結果和權重影響
+- 保持專業的投資分析報告風格
 """
 
     def _build_analysis_prompt(self, ticker: str, technical_data: Dict) -> str:
@@ -272,12 +278,27 @@ class GeminiEnhancedAnalyzer:
     
     def _fuse_scores(self, technical_data: Dict, gemini_results: Dict) -> float:
         """融合技術分析和Gemini分析評分"""
+        from config import AI_ANALYSIS_WEIGHTS
+        
         technical_score = technical_data.get('final_score', 0)
         ai_analysis = gemini_results.get('ai_analysis', {})
         ai_score = ai_analysis.get('ai_score', 0)
         confidence = ai_analysis.get('confidence', 0) / 100
         
-        # 加權融合：技術分析60% + Gemini分析40%
-        fused_score = (technical_score * 0.6) + (ai_score * 0.4 * confidence)
+        # 多維度融合評分
+        technical_weight = AI_ANALYSIS_WEIGHTS["TECHNICAL_ANALYSIS"] / 100
+        news_weight = AI_ANALYSIS_WEIGHTS["NEWS_ANALYSIS"] / 100
+        sentiment_weight = AI_ANALYSIS_WEIGHTS["MARKET_SENTIMENT"] / 100
+        risk_weight = AI_ANALYSIS_WEIGHTS["RISK_ASSESSMENT"] / 100
+        
+        # 計算各維度分數
+        technical_component = technical_score * technical_weight
+        news_component = ai_score * news_weight * confidence
+        sentiment_component = ai_score * sentiment_weight * confidence
+        risk_component = ai_score * risk_weight * confidence
+        
+        # 融合所有維度
+        fused_score = (technical_component + news_component + 
+                      sentiment_component + risk_component)
         
         return min(100, max(0, fused_score))

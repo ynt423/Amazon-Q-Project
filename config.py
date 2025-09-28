@@ -37,3 +37,12 @@ WEIGHTS = {
     "PATTERN_BONUS": 10,   # 形態獎勵 (VCP/Cup)
     "TREND_FILTER": 20     # MA200 大盤趨勢過濾
 }
+
+# --- AI增強分析權重 (新增) ---
+# 總和為 100%
+AI_ANALYSIS_WEIGHTS = {
+    "TECHNICAL_ANALYSIS": 50,    # 技術分析 (50%)
+    "NEWS_ANALYSIS": 20,         # 新聞分析 (20%)
+    "MARKET_SENTIMENT": 15,      # 市場情緒 (15%)
+    "RISK_ASSESSMENT": 15        # 風險評估 (15%)
+}

@@ -438,252 +438,6 @@ class GrowthSignalAnalyzer:
         except Exception as e:
             return False, f"分析失敗: {str(e)}"
     
-    def _calculate_final_score(self, scores_dict, vcp_detected, cup_handle_detected):
-        """計算最終評分"""
-        from config import WEIGHTS
-        
-        # 基礎分數計算
-        base_score = 0
-        for key, weight in WEIGHTS.items():
-            if key in scores_dict:
-                base_score += scores_dict[key] * (weight / 100)
-        
-        # 形態獎勵
-        pattern_bonus = 0
-        if vcp_detected:
-            pattern_bonus += 10  # VCP 形態獎勵
-        if cup_handle_detected:
-            pattern_bonus += 8   # Cup & Handle 形態獎勵
-        
-        # 最終分數 (不超過100)
-        final_score = min(100, base_score + pattern_bonus)
-        
-        return final_score
-    
-    def calculate_rs_rating(self, data, sp500_data):
-        """計算 RS Rating (相對強度評級)"""
-        try:
-            if len(data) < 126 or len(sp500_data) < 126:  # 需要至少6個月數據
-                return 50  # 默認中性評級
-            
-            # 取最近6個月數據
-            stock_returns = data['Close'].pct_change().dropna()
-            sp500_returns = sp500_data['Close'].pct_change().dropna()
-            
-            # 計算相對表現
-            relative_performance = (stock_returns - sp500_returns).mean()
-            
-            # 轉換為1-99評級
-            if relative_performance > 0.02:  # 2%以上超額收益
-                rs_rating = min(99, 80 + (relative_performance - 0.02) * 1000)
-            elif relative_performance > 0:  # 正超額收益
-                rs_rating = 60 + (relative_performance / 0.02) * 20
-            elif relative_performance > -0.02:  # 小幅負超額收益
-                rs_rating = 40 + (relative_performance + 0.02) / 0.02 * 20
-            else:  # 大幅負超額收益
-                rs_rating = max(1, 40 + (relative_performance + 0.02) * 1000)
-            
-            return max(1, min(99, int(rs_rating)))
-        except Exception as e:
-            logging.error(f"RS Rating計算失敗: {e}")
-            return 50
-    
-    def calculate_rsi_score(self, data):
-        """計算 RSI 分數"""
-        try:
-            if len(data) < RSI_PERIOD + 1:
-                return 50, 50
-            
-            # 計算RSI
-            delta = data['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=RSI_PERIOD).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=RSI_PERIOD).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
-            rsi_value = rsi.iloc[-1]
-            
-            # 轉換為分數 (0-100)
-            if rsi_value >= 70:
-                rsi_score = 20  # 超買，低分
-            elif rsi_value >= 60:
-                rsi_score = 40
-            elif rsi_value >= 50:
-                rsi_score = 60
-            elif rsi_value >= 40:
-                rsi_score = 80
-            elif rsi_value >= 30:
-                rsi_score = 60
-            else:
-                rsi_score = 40  # 超賣，中等分數
-            
-            return rsi_value, rsi_score
-        except Exception as e:
-            logging.error(f"RSI計算失敗: {e}")
-            return 50, 50
-    
-    def calculate_macd_score(self, data):
-        """計算 MACD 分數"""
-        try:
-            if len(data) < MACD_LONG_PERIOD + MACD_SIGNAL_PERIOD:
-                return 0, 0, 50
-            
-            # 計算EMA
-            ema_short = data['Close'].ewm(span=MACD_SHORT_PERIOD).mean()
-            ema_long = data['Close'].ewm(span=MACD_LONG_PERIOD).mean()
-            
-            # 計算MACD線
-            macd_line = ema_short - ema_long
-            signal_line = macd_line.ewm(span=MACD_SIGNAL_PERIOD).mean()
-            histogram = macd_line - signal_line
-            
-            macd_value = macd_line.iloc[-1]
-            signal_value = signal_line.iloc[-1]
-            
-            # 計算分數
-            if macd_value > signal_value and histogram.iloc[-1] > histogram.iloc[-2]:
-                macd_score = 90  # 強勢上升
-            elif macd_value > signal_value:
-                macd_score = 70  # 上升趨勢
-            elif macd_value > 0:
-                macd_score = 60  # 中性偏多
-            elif macd_value > signal_value:
-                macd_score = 40  # 下降趨勢
-            else:
-                macd_score = 20  # 強勢下降
-            
-            return macd_value, signal_value, macd_score
-        except Exception as e:
-            logging.error(f"MACD計算失敗: {e}")
-            return 0, 0, 50
-    
-    def calculate_bb_score(self, data):
-        """計算布林帶分數"""
-        try:
-            if len(data) < BB_PERIOD:
-                return 50
-            
-            # 計算布林帶
-            sma = data['Close'].rolling(window=BB_PERIOD).mean()
-            std = data['Close'].rolling(window=BB_PERIOD).std()
-            upper_band = sma + (std * BB_STD_DEV)
-            lower_band = sma - (std * BB_STD_DEV)
-            
-            current_price = data['Close'].iloc[-1]
-            current_upper = upper_band.iloc[-1]
-            current_lower = lower_band.iloc[-1]
-            
-            # 計算位置分數
-            if current_price >= current_upper:
-                bb_score = 20  # 超買
-            elif current_price <= current_lower:
-                bb_score = 80  # 超賣，可能反彈
-            else:
-                # 在帶內，計算相對位置
-                position = (current_price - current_lower) / (current_upper - current_lower)
-                bb_score = 60 + (position - 0.5) * 40  # 50-90分範圍
-            
-            return max(10, min(90, bb_score))
-        except Exception as e:
-            logging.error(f"布林帶計算失敗: {e}")
-            return 50
-    
-    def check_volume_confirmation(self, data):
-        """檢查成交量確認"""
-        try:
-            if len(data) < 20:
-                return 50, "數據不足"
-            
-            # 計算成交量移動平均
-            volume_ma = data['Volume'].rolling(window=20).mean()
-            recent_volume = data['Volume'].iloc[-5:].mean()  # 最近5天平均
-            avg_volume = volume_ma.iloc[-1]
-            
-            # 計算成交量比率
-            volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
-            
-            # 價格變化
-            price_change = (data['Close'].iloc[-1] - data['Close'].iloc[-5]) / data['Close'].iloc[-5]
-            
-            # 成交量確認邏輯
-            if volume_ratio > 1.5 and price_change > 0:
-                return 90, "強勢放量上漲"
-            elif volume_ratio > 1.2 and price_change > 0:
-                return 70, "溫和放量上漲"
-            elif volume_ratio > 1.0:
-                return 60, "成交量正常"
-            elif volume_ratio > 0.8:
-                return 40, "成交量偏低"
-            else:
-                return 20, "成交量不足"
-        except Exception as e:
-            logging.error(f"成交量檢查失敗: {e}")
-            return 50, "檢查失敗"
-    
-    def check_market_trend(self, sp500_data):
-        """檢查大盤趨勢"""
-        try:
-            if len(sp500_data) < 200:
-                return True, 50, "數據不足"
-            
-            # 計算MA200
-            ma200 = sp500_data['Close'].rolling(window=200).mean()
-            current_price = sp500_data['Close'].iloc[-1]
-            current_ma200 = ma200.iloc[-1]
-            
-            # 趨勢判斷
-            if current_price > current_ma200 * 1.05:  # 5%以上
-                return True, 90, "強勢上升趨勢"
-            elif current_price > current_ma200:
-                return True, 70, "上升趨勢"
-            elif current_price > current_ma200 * 0.95:  # 5%以內
-                return True, 50, "震盪趨勢"
-            else:
-                return False, 30, "下降趨勢"
-        except Exception as e:
-            logging.error(f"大盤趨勢檢查失敗: {e}")
-            return True, 50, "檢查失敗"
-    
-    def detect_vcp_pattern(self, data):
-        """檢測 VCP 形態"""
-        try:
-            if len(data) < 60:  # 需要至少3個月數據
-                return False, "數據不足", None
-            
-            # 取最近3個月數據
-            recent_data = data.tail(60)
-            prices = recent_data['Close']
-            volumes = recent_data['Volume']
-            
-            # 計算波動率
-            returns = prices.pct_change().dropna()
-            volatility = returns.rolling(window=10).std()
-            
-            # 檢查波動率收縮
-            recent_vol = volatility.iloc[-10:].mean()
-            early_vol = volatility.iloc[:10].mean()
-            vol_contraction = (early_vol - recent_vol) / early_vol if early_vol > 0 else 0
-            
-            # 檢查價格整理
-            price_range = (prices.max() - prices.min()) / prices.mean()
-            
-            # 檢查成交量下降
-            recent_volume = volumes.iloc[-10:].mean()
-            early_volume = volumes.iloc[:10].mean()
-            volume_decline = (early_volume - recent_volume) / early_volume if early_volume > 0 else 0
-            
-            # VCP 判斷條件
-            if vol_contraction > 0.2 and price_range < 0.2 and volume_decline > 0.1:
-                # 計算建議止損點
-                stop_loss = prices.min() * 0.95  # 最低價的95%
-                return True, "VCP形態確認", stop_loss
-            elif vol_contraction > 0.1 and price_range < 0.3:
-                return True, "潛在VCP形態", prices.min() * 0.95
-            else:
-                return False, "未發現VCP", None
-        except Exception as e:
-            logging.error(f"VCP檢測失敗: {e}")
-            return False, "檢測失敗", None
-    
     def prepare_chart_data(self, data):
         """準備圖表數據"""
         try:
@@ -694,28 +448,26 @@ class GrowthSignalAnalyzer:
             ma20 = data['Close'].rolling(window=20).mean()
             ma50 = data['Close'].rolling(window=50).mean()
             
-            # 布林帶
+            # 布林通道
             bb_period = 20
             bb_std = 2
             sma = data['Close'].rolling(window=bb_period).mean()
             std = data['Close'].rolling(window=bb_period).std()
-            bb_upper = sma + (std * bb_std)
-            bb_lower = sma - (std * bb_std)
+            upper_band = sma + (std * bb_std)
+            lower_band = sma - (std * bb_std)
             
-            # 準備數據，處理 NaN 值
-            def clean_nan_values(series):
-                """將 NaN 值替換為 None，以便 JSON 序列化"""
-                return [None if pd.isna(x) else float(x) for x in series]
+            # 處理 NaN 值，替換為 None 以便 JSON 序列化
+            def clean_series(series):
+                return [None if pd.isna(x) else x for x in series.tolist()]
             
             chart_data = {
                 'dates': data.index.strftime('%Y-%m-%d').tolist(),
-                'close': clean_nan_values(data['Close']),
-                'volume': clean_nan_values(data['Volume']),
-                'ma20': clean_nan_values(ma20),
-                'ma50': clean_nan_values(ma50),
-                'bb_upper': clean_nan_values(bb_upper),
-                'bb_lower': clean_nan_values(bb_lower),
-                'bb_middle': clean_nan_values(sma)
+                'prices': data['Close'].tolist(),
+                'volumes': data['Volume'].tolist(),
+                'ma20': clean_series(ma20),
+                'ma50': clean_series(ma50),
+                'bb_upper': clean_series(upper_band),
+                'bb_lower': clean_series(lower_band)
             }
             
             return chart_data

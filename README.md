@@ -138,6 +138,7 @@ python scheduler.py
 - `GET /api/recommended-stocks` - 獲取推薦股票
 - `GET /api/stop-loss/<ticker>` - 獲取止損建議
 - `GET /api/news/<ticker>` - 獲取新聞分析
+- `POST /api/trigger-scan` - 手動觸發股票掃描 (管理員用)
 
 ### 使用示例
 ```bash
