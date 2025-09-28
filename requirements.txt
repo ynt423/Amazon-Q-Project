@@ -17,6 +17,7 @@ schedule>=1.2.0
 # HTTP Requests
 requests>=2.31.0
 httpx>=0.25.0
+urllib3>=2.0.0
 
 # Environment Variables
 python-dotenv>=1.0.0

@@ -272,12 +272,16 @@ class GrowthSignalAnalyzer:
         enhanced_vcp_detected, enhanced_vcp_status, enhanced_vcp_details = self.detect_enhanced_vcp(data)
         cup_handle_detected, cup_handle_status = self.detect_cup_handle_pattern(data)
         
-        # 合併形態檢測結果
+        # 合併形態檢測結果，統一VCP檢測結果
         all_patterns = []
-        if vcp_detected:
-            all_patterns.append(f"VCP: {vcp_status}")
-        if enhanced_vcp_detected:
-            all_patterns.append(f"Enhanced VCP: {enhanced_vcp_status}")
+        final_vcp_detected = vcp_detected or enhanced_vcp_detected
+        if final_vcp_detected:
+            if vcp_detected and enhanced_vcp_detected:
+                all_patterns.append(f"VCP: {vcp_status} + {enhanced_vcp_status}")
+            elif enhanced_vcp_detected:
+                all_patterns.append(f"VCP: {enhanced_vcp_status}")
+            else:
+                all_patterns.append(f"VCP: {vcp_status}")
         if cup_handle_detected:
             all_patterns.append(f"Cup & Handle: {cup_handle_status}")
         
@@ -313,6 +317,9 @@ class GrowthSignalAnalyzer:
             advice = "Avoid (風險高)"
             advice_color = "danger"
         
+        # 計算突破位
+        breakout_price = self.calculate_breakout_price(data, final_vcp_detected, cup_handle_detected)
+        
         # 準備圖表數據
         chart_data = self.prepare_chart_data(data)
         
@@ -327,8 +334,8 @@ class GrowthSignalAnalyzer:
             "macd": round(macd_value, 2) if macd_value is not None else 0,
             "signal": round(signal_value, 2) if signal_value is not None else 0,
             # 必須強制轉換為 Python 標準 bool 型別，解決 JSON 序列化錯誤
-            "vcp_detected": bool(vcp_detected),
-            "vcp_status": vcp_status,
+            "vcp_detected": bool(final_vcp_detected),
+            "vcp_status": vcp_status if vcp_detected else enhanced_vcp_status if enhanced_vcp_detected else "未發現",
             "pattern_summary": pattern_summary,
             "enhanced_vcp_detected": bool(enhanced_vcp_detected),
             "enhanced_vcp_status": enhanced_vcp_status,
@@ -337,6 +344,7 @@ class GrowthSignalAnalyzer:
             "market_trend": trend_status,
             "recommended_stop_loss": round(stop_loss_price, 2) if stop_loss_price is not None and stop_loss_price != "N/A" else "N/A",
             "chart_data": chart_data,
+            "breakout_price": breakout_price,
             "success": True
         }
     
@@ -393,7 +401,7 @@ class GrowthSignalAnalyzer:
                     vcp_score += 10
                     criteria['sufficient_time'] = True
                 
-                detected = vcp_score >= 60
+                detected = vcp_score >= 40
                 status = "強烈信號" if vcp_score >= 80 else "潛在信號" if detected else "未發現"
                 
                 return detected, status, {
@@ -438,6 +446,33 @@ class GrowthSignalAnalyzer:
         except Exception as e:
             return False, f"分析失敗: {str(e)}"
     
+    def calculate_breakout_price(self, data, vcp_detected, cup_handle_detected):
+        """計算突破位 - 基於 William O'Neil 和 Mark Minervini 哲學"""
+        try:
+            current_price = data['Close'].iloc[-1]
+            
+            if vcp_detected:
+                # VCP突破位: 最近30日最高價 + 2-3%
+                recent_high = data['High'].tail(30).max()
+                breakout_price = recent_high * 1.025  # 2.5%突破
+                return round(breakout_price, 2)
+            
+            elif cup_handle_detected:
+                # Cup & Handle突破位: 杯口最高價 + 1-2%
+                cup_high = data['High'].tail(120).max()
+                breakout_price = cup_high * 1.015  # 1.5%突破
+                return round(breakout_price, 2)
+            
+            else:
+                # 無形態: 使用20日最高價 + 3%
+                resistance_level = data['High'].tail(20).max()
+                breakout_price = resistance_level * 1.03
+                return round(breakout_price, 2)
+                
+        except Exception as e:
+            logging.error(f"突破位計算錯誤: {e}")
+            return "N/A"
+    
     def prepare_chart_data(self, data):
         """準備圖表數據"""
         try:
@@ -462,8 +497,11 @@ class GrowthSignalAnalyzer:
             
             chart_data = {
                 'dates': data.index.strftime('%Y-%m-%d').tolist(),
-                'prices': data['Close'].tolist(),
-                'volumes': data['Volume'].tolist(),
+                'open': data['Open'].tolist(),
+                'high': data['High'].tolist(),
+                'low': data['Low'].tolist(),
+                'close': data['Close'].tolist(),
+                'volume': data['Volume'].tolist(),
                 'ma20': clean_series(ma20),
                 'ma50': clean_series(ma50),
                 'bb_upper': clean_series(upper_band),

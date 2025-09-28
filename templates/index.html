@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Enhanced Growth Stock Analysis System</title>
+    <title>StockVision Pro - 智能股票分析平台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         /* Beautiful Gaussian Blur Gradient Background with Grid */
@@ -133,7 +134,7 @@
             display: none;
         }
         .chart-container {
-            height: 400px;
+            height: 520px;
             margin: 15px 0;
             padding-top: 15px;
             width: 100%;
@@ -180,7 +181,7 @@
     <div class="container py-5">
         <!-- 標題區域 -->
         <div class="text-center mb-5">
-            <h1 class="display-4 fw-bold text-primary">AI-Enhanced Growth Stock Analysis</h1>
+            <h1 class="display-4 fw-bold text-primary">StockVision Pro</h1>
             <p class="lead text-muted">基於 William O'Neil 和 Mark Minervini 哲學的智能股票分析平台</p>
         </div>
 
@@ -200,6 +201,10 @@
                                     <i class="fas fa-sync-alt me-1"></i>
                                     刷新推薦
                                 </button>
+                                <button class="btn btn-outline-info btn-sm" onclick="showWatchlist()" id="watchlistBtn">
+                                    <i class="fas fa-heart me-1"></i>
+                                    我的收藏
+                                </button>
                                 <button class="btn btn-outline-success btn-sm" onclick="initializeDatabase()" id="initBtn">
                                     <i class="fas fa-database me-1"></i>
                                     初始化數據
@@ -209,13 +214,29 @@
                         <div class="row">
                             {% for stock in recommended_stocks %}
                             <div class="col-md-3 col-sm-6 mb-3">
-                                <div class="card h-100 stock-card" onclick="quickAnalyze('{{ stock.ticker }}')" style="cursor: pointer;">
-                                    <div class="card-body text-center">
+                                <div class="card h-100 stock-card" style="position: relative;">
+                                    <div class="position-absolute top-0 end-0 p-2">
+                                        <i class="fas fa-star" 
+                                           style="cursor: pointer; color: #ddd; font-size: 1.2em;" 
+                                           data-ticker="{{ stock.ticker }}"
+                                           onclick="toggleWatchlist('{{ stock.ticker }}', this)"
+                                           title="收藏股票"></i>
+                                    </div>
+                                    <div class="card-body text-center" onclick="quickAnalyze('{{ stock.ticker }}')" style="cursor: pointer;">
                                         <h6 class="card-title">{{ stock.ticker }}</h6>
                                         <div class="h5 text-primary">${{ "%.2f"|format(stock.current_price) }}</div>
-                                        <span class="badge bg-{{ 'success' if stock.pattern_type == 'VCP' else 'primary' }} mb-2">
-                                            {{ stock.pattern_type.replace('_', ' & ') }}
-                                        </span>
+                                        {% if stock.pattern_types is defined %}
+                                            {% for pattern in stock.pattern_types %}
+                                                <span class="badge bg-{{ 'success' if pattern == 'VCP' else 'primary' }} mb-1 me-1">
+                                                    {{ pattern.replace('_', ' & ') }}
+                                                </span>
+                                                {% if not loop.last %}<br>{% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="badge bg-{{ 'success' if stock.pattern_type == 'VCP' else 'primary' }} mb-2">
+                                                {{ stock.pattern_type.replace('_', ' & ') }}
+                                            </span>
+                                        {% endif %}
                                         <div class="small text-muted">
                                             信心度: {{ stock.confidence_score|int }}%<br>
                                             風險: {{ '低' if stock.risk_score == 1 else '中' if stock.risk_score == 2 else '高' }}
@@ -287,7 +308,13 @@
             <!-- 信號卡片 -->
             <div class="row justify-content-center mb-4">
                 <div class="col-md-8">
-                    <div class="card signal-card">
+                    <div class="card signal-card" style="position: relative;">
+                        <div class="position-absolute top-0 end-0 p-3">
+                            <i class="fas fa-star" id="mainStarBtn"
+                               style="cursor: pointer; color: #ddd; font-size: 1.5em;" 
+                               onclick="toggleWatchlist(window.stockAnalyzer?.currentTicker || '', this)"
+                               title="收藏股票"></i>
+                        </div>
                         <div class="card-body text-center p-4">
                             <h5 class="card-title mb-3">綜合信號評分</h5>
                             <div class="row align-items-center">
@@ -439,6 +466,12 @@
                                         <span id="patternSummary" class="badge bg-primary">--</span>
                                     </div>
                                 </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>突破位:</span>
+                                        <span id="breakoutPrice" class="badge bg-success">--</span>
+                                    </div>
+                                </div>
                                 <div class="alert alert-info">
                                     <small>
                                         <strong>風險提示:</strong><br>
@@ -531,6 +564,7 @@
                 }
 
                 this.currentTicker = ticker;
+                window.stockAnalyzer.currentTicker = ticker;
                 this.setLoading(true);
                 this.hideError();
                 this.hideResults();
@@ -639,6 +673,14 @@
                 
                 const patternSummary = document.getElementById('patternSummary');
                 patternSummary.textContent = data.pattern_summary || '未發現形態';
+                
+                // 更新突破位
+                const breakoutPrice = document.getElementById('breakoutPrice');
+                if (data.breakout_price && data.breakout_price !== 'N/A') {
+                    breakoutPrice.textContent = `$${data.breakout_price}`;
+                } else {
+                    breakoutPrice.textContent = 'N/A';
+                }
 
                 // 繪製圖表
                 this.drawChart(data.chart_data, data.ticker);
@@ -652,6 +694,7 @@
                     return;
                 }
 
+                // K線圖
                 const candlestickTrace = {
                     x: chartData.dates,
                     open: chartData.open,
@@ -660,36 +703,82 @@
                     close: chartData.close,
                     type: 'candlestick',
                     name: ticker,
-                    increasing: { line: { color: '#00ff00' } },
-                    decreasing: { line: { color: '#ff0000' } }
+                    yaxis: 'y',
+                    increasing: { line: { color: '#00C851' } },
+                    decreasing: { line: { color: '#ff4444' } }
                 };
 
+                // MA20 移動平均線
                 const ma20Trace = {
                     x: chartData.dates,
                     y: chartData.ma20,
                     type: 'scatter',
                     mode: 'lines',
                     name: 'MA20',
+                    yaxis: 'y',
                     line: { color: '#1f77b4', width: 2 }
+                };
+
+                // MA50 移動平均線
+                const ma50Trace = {
+                    x: chartData.dates,
+                    y: chartData.ma50,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'MA50',
+                    yaxis: 'y',
+                    line: { color: '#ff7f0e', width: 2 }
+                };
+
+                // 成交量柱狀圖
+                const volumeTrace = {
+                    x: chartData.dates,
+                    y: chartData.volume,
+                    type: 'bar',
+                    name: '成交量',
+                    yaxis: 'y2',
+                    marker: {
+                        color: chartData.close.map((close, i) => {
+                            if (i === 0) return '#666';
+                            return close >= chartData.close[i-1] ? '#00C851' : '#ff4444';
+                        }),
+                        opacity: 0.6
+                    }
                 };
 
                 const layout = {
                     title: {
-                        text: `${ticker} 股價走勢 (最近6個月)`,
+                        text: `${ticker} 股價走勢與成交量`,
                         x: 0.5,
                         xanchor: 'center',
                         font: { size: 16 }
                     },
-                    xaxis: { title: '日期' },
-                    yaxis: { title: '價格 ($)' },
+                    xaxis: {
+                        title: '日期',
+                        rangeslider: { visible: false },
+                        type: 'date'
+                    },
+                    yaxis: {
+                        title: '價格 ($)',
+                        domain: [0.3, 1],
+                        side: 'left'
+                    },
+                    yaxis2: {
+                        title: '成交量',
+                        domain: [0, 0.25],
+                        side: 'left'
+                    },
                     showlegend: true,
-                    height: 380,
-                    margin: { l: 50, r: 30, t: 80, b: 50 },
+                    height: 500,
+                    margin: { l: 60, r: 30, t: 80, b: 50 },
                     autosize: true,
-                    responsive: true
+                    responsive: true,
+                    plot_bgcolor: 'rgba(240,240,240,0.3)',
+                    paper_bgcolor: 'rgba(255,255,255,0.9)'
                 };
 
-                Plotly.newPlot('priceChart', [candlestickTrace, ma20Trace], layout);
+                const traces = [candlestickTrace, ma20Trace, ma50Trace, volumeTrace];
+                Plotly.newPlot('priceChart', traces, layout, {responsive: true});
             }
 
             setLoading(isLoading) {
@@ -712,6 +801,19 @@
 
             showResults() {
                 document.getElementById('resultsSection').style.display = 'block';
+                // 更新主星號狀態
+                setTimeout(() => {
+                    const mainStar = document.getElementById('mainStarBtn');
+                    if (mainStar && this.currentTicker) {
+                        if (watchlistData.includes(this.currentTicker)) {
+                            mainStar.style.color = 'gold';
+                            mainStar.title = '取消收藏';
+                        } else {
+                            mainStar.style.color = '#ddd';
+                            mainStar.title = '收藏股票';
+                        }
+                    }
+                }, 100);
             }
 
             hideResults() {
@@ -781,33 +883,43 @@
 
                 container.innerHTML = `
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="text-center p-3">
                                 <div class="h4 text-primary">$${data.current_price}</div>
                                 <small class="text-muted">當前價格</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="text-center p-3">
                                 <div class="h4 text-danger">$${data.suggested_stop_loss}</div>
                                 <small class="text-muted">建議止損</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="text-center p-3">
                                 <div class="h4 text-info">$${data.support_level}</div>
                                 <small class="text-muted">支撐位</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="text-center p-3">
                                 <div class="h4 text-warning">${data.risk_level}</div>
                                 <small class="text-muted">風險等級</small>
                             </div>
                         </div>
+                        <div class="col-md-2">
+                            <div class="text-center p-3">
+                                <div class="h4 text-success">$${data.breakout_price || 'N/A'}</div>
+                                <small class="text-muted">突破位</small>
+                            </div>
+                        </div>
                     </div>
                     <div class="alert alert-info mt-3">
                         <strong>建議:</strong> ${data.advice}
+                    </div>
+                    <div class="alert alert-${data.judgment_color || 'info'} mt-2">
+                        <strong>專業判斷:</strong> ${data.risk_judgment || 'N/A'}
+                        <br><small>基於成長股投資風險管理哲學</small>
                     </div>
                 `;
             }
@@ -829,7 +941,6 @@
                     
                     html += `
                         <div class="mb-4">
-                            <h6 class="text-primary mb-3">🧠 AI 深度分析</h6>
                             <div class="card">
                                 <div class="card-body">
                                     <div class="ai-analysis-content" style="line-height: 1.8; font-size: 1.1em; word-wrap: break-word; max-height: none; overflow: visible;">
@@ -842,7 +953,6 @@
                 } else if (data.ai_enhanced && data.ai_enhanced.natural_analysis) {
                     html += `
                         <div class="mb-4">
-                            <h6 class="text-primary mb-3">🧠 AI 深度分析</h6>
                             <div class="card">
                                 <div class="card-body">
                                     <div class="ai-analysis-content" style="line-height: 1.8; font-size: 1.1em; word-wrap: break-word; max-height: none; overflow: visible;">
@@ -891,20 +1001,69 @@
                 if (data.news_analysis && data.news_analysis.articles) {
                     html += `
                         <div class="mb-4">
-                            <h6 class="text-primary">📰 最新新聞洞察</h6>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="text-primary mb-0">📰 最新新聞洞察</h6>
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-outline-success btn-sm" onclick="addToWatchlist('${data.ticker || this.currentTicker}')" id="addWatchlistBtn">
+                                        <i class="fas fa-star me-1"></i>收藏股票
+                                    </button>
+                                    <small class="text-muted ms-2">時間: ${data.news_analysis.current_time || ''}</small>
+                                </div>
+                            </div>
                             <div class="row">
                     `;
                     
                     data.news_analysis.articles.slice(0, 3).forEach((article, index) => {
+                        // 增強連結有效性檢查
+                        const url = article.url || '';
+                        const isValidUrl = url && (url.startsWith('http://') || url.startsWith('https://')) && url.length > 10;
+                        const publishedDate = article.publishedAt || article.published_at || article.datetime || '';
+                        
+                        // 格式化時間
+                        let timeAgo = '';
+                        if (publishedDate) {
+                            try {
+                                const date = new Date(publishedDate);
+                                if (!isNaN(date.getTime())) {
+                                    timeAgo = date.toLocaleDateString('zh-TW', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    });
+                                }
+                            } catch (e) {
+                                console.warn('時間格式化失敗:', publishedDate);
+                            }
+                        }
+                        
+                        // 獲取摘要
+                        const description = article.description || article.summary || article.content || '';
+                        const truncatedDesc = description.length > 120 ? description.substring(0, 120) + '...' : description;
+                        
+                        // 驗證源名稱
+                        const source = article.source || 'Financial News';
+                        
                         html += `
                             <div class="col-md-4 mb-3">
-                                <div class="card h-100">
+                                <div class="card h-100 news-card" style="transition: transform 0.2s; cursor: ${isValidUrl ? 'pointer' : 'default'};" ${isValidUrl ? `onclick="window.open('${url}', '_blank', 'noopener,noreferrer')"` : ''}>
                                     <div class="card-body">
-                                        <h6 class="card-title">${article.title || 'N/A'}</h6>
-                                        <p class="card-text small">${(article.description || article.summary || '').substring(0, 100)}...</p>
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <small class="text-muted">${article.source || 'Unknown'}</small>
-                                            ${article.url ? `<a href="${article.url}" target="_blank" class="btn btn-sm btn-outline-primary">閱讀</a>` : ''}
+                                        <h6 class="card-title" style="color: ${isValidUrl ? '#0066cc' : '#333'}; text-decoration: ${isValidUrl ? 'underline' : 'none'};">${article.title || '無標題'}</h6>
+                                        <p class="card-text small text-muted">${truncatedDesc}</p>
+                                        <div class="d-flex justify-content-between align-items-center mt-auto">
+                                            <div>
+                                                <small class="text-primary fw-bold">${source}</small>
+                                                ${timeAgo ? `<br><small class="text-muted"><i class="fas fa-clock me-1"></i>${timeAgo}</small>` : ''}
+                                                ${article.verified ? '<br><small class="text-success"><i class="fas fa-check-circle me-1"></i>已驗證</small>' : ''}
+                                            </div>
+                                            <div>
+                                                ${isValidUrl ? `
+                                                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();">
+                                                        <i class="fas fa-external-link-alt me-1"></i>閱讀
+                                                    </a>
+                                                ` : '<span class="text-muted small"><i class="fas fa-times-circle me-1"></i>無連結</span>'}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -967,6 +1126,8 @@
                 
                 // 按標題分段處理
                 let formatted = text
+                    // 處理HTML連結（保持原有格式）
+                    .replace(/<a\s+href="([^"]+)"\s+target="_blank"[^>]*>([^<]+)<\/a>/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary fw-bold">$2 <i class="fas fa-external-link-alt ms-1"></i></a>')
                     // 處理主要標題 (## 開頭)
                     .replace(/##\s*(.+?)(?=\n|$)/g, '<h4 class="text-primary mt-4 mb-3">$1</h4>')
                     // 處理副標題 (** 開頭)
@@ -993,6 +1154,7 @@
         function quickAnalyze(ticker) {
             console.log('Quick analyzing:', ticker);
             document.getElementById('tickerInput').value = ticker;
+            window.stockAnalyzer.currentTicker = ticker;
             window.stockAnalyzer.analyzeStock();
         }
 
@@ -1038,6 +1200,37 @@
             }
         }
 
+        // 刷新推薦股票
+        async function refreshRecommendations() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            
+            try {
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>掃描中...';
+                refreshBtn.disabled = true;
+                
+                const response = await fetch('/api/trigger-scan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ max_stocks: 30 })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    window.location.reload();
+                } else {
+                    alert('刷新失敗: ' + result.error);
+                }
+                
+            } catch (error) {
+                alert('刷新推薦失敗');
+            } finally {
+                refreshBtn.innerHTML = originalText;
+                refreshBtn.disabled = false;
+            }
+        }
+        
         // 初始化數據庫
         async function initializeDatabase() {
             const initBtn = document.getElementById('initBtn');
@@ -1076,9 +1269,339 @@
             }
         }
 
+        // 刷新新聞功能
+        async function refreshNews(ticker) {
+            const refreshNewsBtn = document.getElementById('refreshNewsBtn');
+            if (!refreshNewsBtn) return;
+            
+            const originalText = refreshNewsBtn.innerHTML;
+            
+            try {
+                refreshNewsBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>刷新中...';
+                refreshNewsBtn.disabled = true;
+                
+                const response = await fetch(`/api/refresh-news/${ticker}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 重新顯示AI分析結果
+                    if (result.news_data) {
+                        window.stockAnalyzer.displayAIResults(result.news_data);
+                    }
+                    
+                    // 顯示成功消息
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        <strong>刷新成功！</strong> ${result.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.getElementById('aiAnalysisSection').prepend(alertDiv);
+                    
+                    // 3秒後自動清除消息
+                    setTimeout(() => {
+                        if (alertDiv.parentNode) {
+                            alertDiv.remove();
+                        }
+                    }, 3000);
+                } else {
+                    alert('刷新失敗: ' + result.error);
+                }
+                
+            } catch (error) {
+                console.error('刷新新聞失敗:', error);
+                alert('刷新新聞失敗，請稍後再試');
+            } finally {
+                refreshNewsBtn.innerHTML = originalText;
+                refreshNewsBtn.disabled = false;
+            }
+        }
+        
+        // 驗證新聞連結功能
+        async function verifyNewsLinks(ticker) {
+            const verifyLinksBtn = document.getElementById('verifyLinksBtn');
+            if (!verifyLinksBtn) return;
+            
+            const originalText = verifyLinksBtn.innerHTML;
+            
+            try {
+                verifyLinksBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>驗證中...';
+                verifyLinksBtn.disabled = true;
+                
+                const response = await fetch(`/api/verify-news-links/${ticker}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const summary = result.summary;
+                    const successRate = summary ? summary.success_rate : 0;
+                    
+                    let alertClass = 'alert-info';
+                    if (successRate >= 80) alertClass = 'alert-success';
+                    else if (successRate >= 50) alertClass = 'alert-warning';
+                    else alertClass = 'alert-danger';
+                    
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = `alert ${alertClass} alert-dismissible fade show`;
+                    alertDiv.innerHTML = `
+                        <strong>驗證完成！</strong> 
+                        總連結: ${summary ? summary.total_links : 0} 個，
+                        可訪問: ${summary ? summary.accessible_links : 0} 個，
+                        成功率: ${successRate}%
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.getElementById('aiAnalysisSection').prepend(alertDiv);
+                    
+                    // 5秒後自動清除消息
+                    setTimeout(() => {
+                        if (alertDiv.parentNode) {
+                            alertDiv.remove();
+                        }
+                    }, 5000);
+                    
+                    // 在控制台顯示詳細結果
+                    console.log('新聞連結驗證結果:', result.verified_links);
+                } else {
+                    alert('驗證失敗: ' + result.error);
+                }
+                
+            } catch (error) {
+                console.error('驗證連結失敗:', error);
+                alert('驗證連結失敗，請稍後再試');
+            } finally {
+                verifyLinksBtn.innerHTML = originalText;
+                verifyLinksBtn.disabled = false;
+            }
+        }
+
+        // 收藏功能
+        async function toggleWatchlist(ticker, starElement) {
+            if (!ticker) {
+                console.error('沒有提供股票代號');
+                return;
+            }
+            
+            console.log('切換收藏狀態:', ticker, '當前顏色:', starElement.style.color);
+            
+            try {
+                const isStarred = starElement.style.color === 'gold' || starElement.style.color === 'rgb(255, 215, 0)';
+                
+                if (isStarred) {
+                    // 移除收藏
+                    const response = await fetch(`/api/watchlist/${ticker}`, {
+                        method: 'DELETE'
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        starElement.style.color = '#ddd';
+                        starElement.title = '收藏股票';
+                        watchlistData = watchlistData.filter(t => t !== ticker);
+                        console.log('移除收藏成功:', ticker);
+                    } else {
+                        console.error('移除收藏失敗:', result.message);
+                    }
+                } else {
+                    // 添加收藏
+                    const response = await fetch(`/api/watchlist/${ticker}`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({notes: '潛力股票'})
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        starElement.style.color = 'gold';
+                        starElement.title = '取消收藏';
+                        if (!watchlistData.includes(ticker)) {
+                            watchlistData.push(ticker);
+                        }
+                        console.log('添加收藏成功:', ticker);
+                    } else {
+                        console.log('股票已在收藏列表中:', result.message);
+                        // 即使已存在，也更新UI狀態
+                        starElement.style.color = 'gold';
+                        starElement.title = '取消收藏';
+                    }
+                }
+            } catch (error) {
+                console.error('收藏操作失敗:', error);
+                alert('收藏操作失敗，請稍後再試');
+            }
+        }
+        
+        let watchlistData = [];
+        
+        async function loadWatchlist() {
+            try {
+                const response = await fetch('/api/watchlist');
+                const result = await response.json();
+                
+                if (result.success) {
+                    watchlistData = result.watchlist.map(item => item.ticker);
+                    updateStarStates();
+                }
+            } catch (error) {
+                console.error('獲取收藏列表失敗:', error);
+            }
+        }
+        
+        function updateStarStates() {
+            document.querySelectorAll('.fas.fa-star').forEach(star => {
+                let ticker = null;
+                
+                // 嘗試多種方式獲取ticker
+                if (star.getAttribute('data-ticker')) {
+                    ticker = star.getAttribute('data-ticker');
+                } else if (star.closest('.stock-card')) {
+                    // 推薦股票卡片中的星號
+                    const titleElement = star.closest('.stock-card').querySelector('.card-title');
+                    if (titleElement) {
+                        ticker = titleElement.textContent.trim();
+                    }
+                } else if (star.id === 'mainStarBtn') {
+                    // 主分析結果中的星號
+                    ticker = window.stockAnalyzer?.currentTicker;
+                }
+                
+                console.log('更新星號狀態:', ticker, '收藏列表:', watchlistData);
+                              
+                if (ticker && watchlistData.includes(ticker)) {
+                    star.style.color = 'gold';
+                    star.title = '取消收藏';
+                } else {
+                    star.style.color = '#ddd';
+                    star.title = '收藏股票';
+                }
+            });
+        }
+        
+        async function showWatchlist() {
+            try {
+                const response = await fetch('/api/watchlist');
+                const result = await response.json();
+                
+                if (result.success && result.watchlist.length > 0) {
+                    let modalHtml = `
+                        <div class="modal fade" id="watchlistModal" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title"><i class="fas fa-heart text-danger me-2"></i>我的收藏股票池</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row">
+                    `;
+                    
+                    result.watchlist.forEach((stock, index) => {
+                        modalHtml += `
+                            <div class="col-md-4 col-sm-6 mb-3">
+                                <div class="card h-100 stock-card" style="cursor: pointer;" onclick="quickAnalyze('${stock.ticker}'); bootstrap.Modal.getInstance(document.getElementById('watchlistModal')).hide();">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">${stock.ticker}</h6>
+                                        <small class="text-muted">${stock.added_time}</small>
+                                        <div class="mt-2">
+                                            <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); removeFromWatchlist('${stock.ticker}', this)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    modalHtml += `
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <small class="text-muted">點擊股票卡片進行分析，點擊垃圾桶圖標移除收藏</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 移除舊的modal
+                    const oldModal = document.getElementById('watchlistModal');
+                    if (oldModal) oldModal.remove();
+                    
+                    // 添加新modal到頁面
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    
+                    // 顯示modal
+                    const modal = new bootstrap.Modal(document.getElementById('watchlistModal'));
+                    modal.show();
+                } else {
+                    alert('收藏列表為空，快去收藏一些股票吧！');
+                }
+            } catch (error) {
+                alert('獲取收藏列表失敗');
+            }
+        }
+        
+        async function removeFromWatchlist(ticker, buttonElement) {
+            try {
+                const response = await fetch(`/api/watchlist/${ticker}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 移除卡片
+                    buttonElement.closest('.col-md-4').remove();
+                    // 更新本地數據
+                    watchlistData = watchlistData.filter(t => t !== ticker);
+                    // 更新星號狀態
+                    updateStarStates();
+                }
+            } catch (error) {
+                console.error('移除收藏失敗:', error);
+            }
+        }
+
+        // 測試收藏功能
+        function testWatchlist() {
+            console.log('測試收藏功能...');
+            const testTicker = 'AAPL';
+            const testStar = document.createElement('i');
+            testStar.className = 'fas fa-star';
+            testStar.style.color = '#ddd';
+            toggleWatchlist(testTicker, testStar);
+        }
+        
         // 初始化應用
         document.addEventListener('DOMContentLoaded', () => {
             window.stockAnalyzer = new StockAnalyzer();
+            loadWatchlist();
+            
+            // 添加點擊事件監聽器到所有星號
+            setTimeout(() => {
+                document.querySelectorAll('.fas.fa-star').forEach(star => {
+                    star.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        let ticker = null;
+                        if (this.getAttribute('data-ticker')) {
+                            ticker = this.getAttribute('data-ticker');
+                        } else if (this.closest('.stock-card')) {
+                            const titleElement = this.closest('.stock-card').querySelector('.card-title');
+                            if (titleElement) {
+                                ticker = titleElement.textContent.trim();
+                            }
+                        } else if (this.id === 'mainStarBtn') {
+                            ticker = window.stockAnalyzer?.currentTicker;
+                        }
+                        
+                        if (ticker) {
+                            toggleWatchlist(ticker, this);
+                        } else {
+                            console.error('無法獲取股票代號');
+                        }
+                    });
+                });
+            }, 1000);
         });
     </script>
 </body>

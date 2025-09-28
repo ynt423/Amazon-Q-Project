@@ -3,6 +3,7 @@
 import requests
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import os
@@ -30,25 +31,59 @@ class NewsAnalyzer:
     async def get_market_news(self, ticker: str, days: int = 7) -> Dict:
         """獲取股票相關新聞"""
         try:
+            all_articles = []
+            current_time = time.time()
+            
+            # 1. 嘗試Yahoo Finance API
+            yahoo_articles = await self._get_yahoo_finance_news(ticker)
+            if yahoo_articles:
+                all_articles.extend(yahoo_articles)
+            
+            # 2. 如果文章不够，嘗試其他API
+            if len(all_articles) < 3:
+                if self.news_api_key:
+                    result = await self._get_newsapi_news(ticker, days)
+                    all_articles.extend(result.get('articles', []))
+                elif self.alpha_vantage_key:
+                    result = await self._get_alpha_vantage_news(ticker, days)
+                    all_articles.extend(result.get('articles', []))
+            
+            # 3. 如果仍然不够，使用備用方案
+            if len(all_articles) < 2:
+                backup_result = await self._get_free_news(ticker, days)
+                all_articles.extend(backup_result.get('articles', []))
+            
+            # 4. 驗證所有連結
+            verified_articles = await self._verify_article_links(all_articles)
+            
+            # 5. 去重和排序
+            unique_articles = []
+            seen_urls = set()
+            
+            for article in verified_articles:
+                url = article.get('url', '')
+                if url not in seen_urls:
+                    seen_urls.add(url)
+                    unique_articles.append(article)
+            
+            # 按時間排序（最新的在前）
+            unique_articles.sort(key=lambda x: x.get('publishedAt', ''), reverse=True)
+            
+            # 只保留前5篇
+            final_articles = unique_articles[:5]
+            
             news_data = {
                 "ticker": ticker,
-                "articles": [],
-                "sentiment_score": 0,
-                "news_count": 0,
-                "last_updated": datetime.now().isoformat()
+                "articles": final_articles,
+                "news_count": len(final_articles),
+                "last_updated": datetime.now().isoformat(),
+                "source": "Multi-source News API",
+                "fetch_time": current_time
             }
             
-            # 嘗試多個新聞源
-            if self.news_api_key:
-                news_data = await self._get_newsapi_news(ticker, days)
-            elif self.alpha_vantage_key:
-                news_data = await self._get_alpha_vantage_news(ticker, days)
-            else:
-                news_data = await self._get_free_news(ticker, days)
-            
             # 分析新聞情緒
-            if news_data["articles"]:
-                sentiment = await self._analyze_news_sentiment(news_data["articles"])
+            if final_articles:
+                sentiment = await self._analyze_news_sentiment(final_articles)
                 news_data["sentiment_score"] = sentiment["score"]
                 news_data["sentiment_breakdown"] = sentiment["breakdown"]
             
@@ -155,32 +190,48 @@ class NewsAnalyzer:
             except Exception as e:
                 self.logger.warning(f"RSS新聞獲取失敗: {e}")
             
-            # 如果沒有獲取到新聞，使用備用方案
+            # 嘗試使用Yahoo Finance新聞API
+            try:
+                yahoo_news = await self._get_yahoo_finance_news(ticker)
+                articles.extend(yahoo_news)
+            except Exception as e:
+                self.logger.warning(f"Yahoo Finance新聞獲取失敗: {e}")
+            
+            # 如果沒有獲取到新聞，使用可靠的備用連結
             if not articles:
+                current_time = datetime.now()
+                
+                # 使用可靠的備用連結（經過測試的有效連結）
                 articles = [
                     {
-                        'title': f'{ticker} 股票最新動態',
-                        'summary': f'關注 {ticker} 的最新市場動態和技術分析。',
+                        'title': f'{ticker} 股票即時報價與分析',
+                        'description': f'查看 {ticker} 的即時股價、技術分析圖表和市場數據。',
                         'url': f'https://finance.yahoo.com/quote/{ticker}',
-                        'datetime': datetime.now().isoformat(),
+                        'publishedAt': current_time.isoformat(),
                         'source': 'Yahoo Finance',
-                        'category': 'Market'
+                        'category': 'Market Data',
+                        'verified': True
                     },
                     {
-                        'title': f'{ticker} 技術分析報告',
-                        'summary': f'基於最新數據的 {ticker} 技術分析。',
-                        'url': f'https://www.marketwatch.com/investing/stock/{ticker.lower()}',
-                        'datetime': datetime.now().isoformat(),
-                        'source': 'MarketWatch',
-                        'category': 'Analysis'
+                        'title': f'{ticker} 新聞與市場洞察',
+                        'description': f'獲取 {ticker} 的最新新聞、分析師評級和市場洞察。',
+                        'url': f'https://finance.yahoo.com/quote/{ticker}/news',
+                        'publishedAt': current_time.isoformat(),
+                        'source': 'Yahoo Finance News',
+                        'category': 'News',
+                        'verified': True
                     }
                 ]
             
+            # 驗證和過濾連結
+            verified_articles = await self._verify_article_links(articles)
+            
             return {
                 "ticker": ticker,
-                "articles": articles,
-                "news_count": len(articles),
-                "source": "Free News Sources"
+                "articles": verified_articles,
+                "news_count": len(verified_articles),
+                "source": "Enhanced Free News Sources",
+                "last_updated": datetime.now().isoformat()
             }
             
         except Exception as e:
@@ -192,32 +243,60 @@ class NewsAnalyzer:
         try:
             import feedparser
             
-            # 使用Yahoo Finance RSS
+            # 更新的RSS源，確保連結有效
             rss_urls = [
                 f'https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US',
-                f'https://feeds.marketwatch.com/marketwatch/marketpulse/',
-                f'https://feeds.bloomberg.com/markets/news.rss'
+                'https://feeds.marketwatch.com/marketwatch/topstories/',
+                'https://feeds.bloomberg.com/markets/news.rss',
+                'https://www.cnbc.com/id/100003114/device/rss/rss.html',  # CNBC Markets
+                'https://feeds.reuters.com/reuters/businessNews'  # Reuters Business
             ]
             
             articles = []
             for url in rss_urls:
                 try:
                     feed = feedparser.parse(url)
-                    for entry in feed.entries[:3]:  # 取前3篇
-                        if ticker.lower() in entry.title.lower() or ticker.lower() in entry.get('summary', '').lower():
+                    if not feed.entries:
+                        continue
+                        
+                    for entry in feed.entries[:5]:  # 取前5篇
+                        # 檢查是否與股票相關
+                        title_lower = entry.title.lower()
+                        summary_lower = entry.get('summary', '').lower()
+                        
+                        if (ticker.lower() in title_lower or 
+                            ticker.lower() in summary_lower or
+                            # 對於主要指數，也包含相關新聞
+                            any(keyword in title_lower for keyword in ['market', 'stock', 'trading', 'earnings'])):
+                            
+                            # 驗證連結有效性
+                            article_url = entry.link
+                            if not article_url or not article_url.startswith('http') or 'example.com' in article_url:
+                                continue
+                            
+                            # 實際測試連結
+                            try:
+                                import requests
+                                response = requests.head(article_url, timeout=3, allow_redirects=True)
+                                if response.status_code >= 400:
+                                    continue
+                            except:
+                                continue
+                            
                             articles.append({
                                 'title': entry.title,
-                                'summary': entry.get('summary', entry.title),
-                                'url': entry.link,
-                                'datetime': entry.get('published', datetime.now().isoformat()),
-                                'source': entry.get('source', {}).get('title', 'RSS Feed'),
-                                'category': 'News'
+                                'description': entry.get('summary', entry.title)[:200] + '...' if len(entry.get('summary', '')) > 200 else entry.get('summary', entry.title),
+                                'url': article_url,
+                                'publishedAt': entry.get('published', datetime.now().isoformat()),
+                                'source': self._extract_source_name(url),
+                                'category': 'News',
+                                'verified': True
                             })
                 except Exception as e:
                     self.logger.warning(f"RSS URL {url} 獲取失敗: {e}")
                     continue
             
-            return articles[:5]  # 最多返回5篇
+            return articles[:8]  # 最多返回8篇
             
         except ImportError:
             self.logger.warning("feedparser 未安裝，跳過RSS新聞")
@@ -294,6 +373,127 @@ class NewsAnalyzer:
         except Exception as e:
             self.logger.error(f"社交媒體情緒分析失敗: {e}")
             return {"ticker": ticker, "error": str(e)}
+    
+    async def _get_yahoo_finance_news(self, ticker: str) -> List[Dict]:
+        """使用Yahoo Finance API獲取新聞"""
+        try:
+            import yfinance as yf
+            
+            # 獲取當前時間
+            current_time = time.time()
+            one_week_ago = current_time - (7 * 24 * 60 * 60)  # 7天前
+            
+            # 使用yfinance獲取新聞
+            stock = yf.Ticker(ticker)
+            news = stock.news
+            
+            articles = []
+            for item in news[:10]:  # 取前10篇然後過濾
+                # 檢查新聞時間（只要一週內的新聞）
+                publish_time = item.get('providerPublishTime', current_time)
+                if publish_time < one_week_ago:
+                    continue
+                
+                # 獲取真實的連結
+                article_url = item.get('link')
+                
+                # 過濾假連結和無效連結
+                if (not article_url or 
+                    not article_url.startswith('http') or 
+                    'example.com' in article_url or
+                    len(article_url) < 20):
+                    continue
+                
+                # 實際驗證連結可訪問性
+                try:
+                    response = requests.get(article_url, timeout=5, allow_redirects=True)
+                    if response.status_code >= 400 or 'not found' in response.text.lower():
+                        continue
+                except:
+                    continue
+                
+                # 確保標題和摘要不為空
+                title = item.get('title', '').strip()
+                summary = item.get('summary', '').strip()
+                
+                if not title or len(title) < 10:
+                    continue
+                
+                articles.append({
+                    'title': title,
+                    'description': summary[:200] + '...' if len(summary) > 200 else summary,
+                    'url': article_url,
+                    'publishedAt': datetime.fromtimestamp(publish_time).isoformat(),
+                    'source': item.get('publisher', 'Yahoo Finance'),
+                    'category': 'Financial News',
+                    'verified': True,
+                    'freshness_score': current_time - publish_time  # 新鮮度評分
+                })
+                
+                # 只返回前5篇有效新聞
+                if len(articles) >= 5:
+                    break
+            
+            # 按時間排序（最新的在前）
+            articles.sort(key=lambda x: x['publishedAt'], reverse=True)
+            
+            return articles
+            
+        except Exception as e:
+            self.logger.warning(f"Yahoo Finance新聞獲取失敗: {e}")
+            return []
+    
+    def _extract_source_name(self, url: str) -> str:
+        """從URL提取源名稱"""
+        if 'yahoo' in url:
+            return 'Yahoo Finance'
+        elif 'marketwatch' in url:
+            return 'MarketWatch'
+        elif 'bloomberg' in url:
+            return 'Bloomberg'
+        elif 'cnbc' in url:
+            return 'CNBC'
+        elif 'reuters' in url:
+            return 'Reuters'
+        else:
+            return 'Financial News'
+    
+    async def _verify_article_links(self, articles: List[Dict]) -> List[Dict]:
+        """驗證文章連結的有效性"""
+        verified_articles = []
+        
+        for article in articles:
+            url = article.get('url', '')
+            
+            # 過濾假連結和無效連結
+            if (not url or 
+                not url.startswith('http') or 
+                'example.com' in url or 
+                len(url) < 15 or
+                'localhost' in url):
+                continue
+            
+            # 實際驗證連結（使用GET請求確保頁面存在）
+            try:
+                response = requests.get(url, timeout=8, allow_redirects=True)
+                
+                # 檢查狀態碼和頁面內容
+                if (response.status_code < 400 and 
+                    'not found' not in response.text.lower() and
+                    'page not found' not in response.text.lower() and
+                    len(response.text) > 1000):  # 確保有實際內容
+                    
+                    article['link_verified'] = True
+                    article['last_verified'] = datetime.now().isoformat()
+                    article['final_url'] = response.url
+                    article['content_length'] = len(response.text)
+                    verified_articles.append(article)
+                    
+            except Exception as e:
+                self.logger.warning(f"連結驗證失敗 {url}: {e}")
+                continue
+        
+        return verified_articles
     
     async def get_market_overview(self) -> Dict:
         """獲取市場概況"""

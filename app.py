@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, jsonify
 import logging
 import asyncio
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 # 加載環境變量
@@ -13,6 +14,8 @@ from config import FLASK_DEBUG, FLASK_PORT, PERIOD_DAILY, PERIOD_WEEKLY, PERIOD_
 from stock_scanner import StockScanner  # F3.1: 導入股票掃描器
 from gemini_analyzer import GeminiEnhancedAnalyzer
 from news_analyzer import EnhancedNewsAnalyzer
+from simple_news import get_latest_news
+from watchlist import Watchlist
 
 # 這是為了解決 U3.1 的模擬數據 (熱門股票建議)
 TICKER_SUGGESTIONS = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMD", "META", "AMZN"] 
@@ -41,9 +44,10 @@ def initialize_database():
 # 初始化數據庫
 initialize_database()
 
-# 初始化 AI 分析器
+# 初始化 AI 分析器和收藏功能
 ai_enhanced_analyzer = None
 news_analyzer = EnhancedNewsAnalyzer()
+watchlist = Watchlist()
 
 # 檢查是否有OpenRouter API密鑰
 api_key = os.getenv('OPENROUTER_API_KEY')
@@ -222,8 +226,26 @@ def get_stop_loss_advice(ticker):
             risk_level = "高風險"
             risk_score = 3
         
-        # 最大損失百分比
-        max_loss_pct = (current_price - suggested_stop_loss) / current_price * 100
+        # 計算突破位
+        breakout_price = analyzer.calculate_breakout_price(stock_data, False, False)
+        
+        # 最大損失百分比 (修正計算: 突破位 - 止損位 / 突破位)
+        if breakout_price != "N/A" and isinstance(breakout_price, (int, float)):
+            max_loss_pct = (breakout_price - suggested_stop_loss) / breakout_price * 100
+        else:
+            # 如果無法計算突破位，使用當前價格
+            max_loss_pct = (current_price - suggested_stop_loss) / current_price * 100
+        
+        # 專業判斷
+        if max_loss_pct <= 7:
+            risk_judgment = "優秀"
+            judgment_color = "success"
+        elif max_loss_pct <= 10:
+            risk_judgment = "可接受"
+            judgment_color = "warning"
+        else:
+            risk_judgment = "風險過高"
+            judgment_color = "danger"
         
         return jsonify({
             "success": True,
@@ -231,10 +253,13 @@ def get_stop_loss_advice(ticker):
             "current_price": round(current_price, 2),
             "suggested_stop_loss": round(suggested_stop_loss, 2),
             "support_level": round(support_level, 2),
+            "breakout_price": breakout_price,
             "max_loss_percentage": round(max_loss_pct, 2),
             "risk_level": risk_level,
             "risk_score": risk_score,
             "volatility": round(volatility, 3),
+            "risk_judgment": risk_judgment,
+            "judgment_color": judgment_color,
             "advice": f"建議止損點: ${suggested_stop_loss:.2f} (最大損失: {max_loss_pct:.1f}%)"
         })
         
@@ -272,10 +297,10 @@ def ai_analysis():
             return jsonify(enhanced_result)
         else:
             # 回退到純技術分析，但添加新聞分析
-            news_result = asyncio.run(news_analyzer.comprehensive_analysis(ticker))
+            latest_news = get_latest_news(ticker)
             return jsonify({
                 **technical_result,
-                "news_analysis": news_result,
+                "news_analysis": latest_news,
                 "ai_enhanced": False,
                 "message": "AI功能未啟用，顯示技術分析結果"
             })
@@ -289,11 +314,167 @@ def ai_analysis():
 def get_news(ticker):
     """獲取股票新聞"""
     try:
-        news_result = asyncio.run(news_analyzer.comprehensive_analysis(ticker))
-        return jsonify(news_result)
+        latest_news = get_latest_news(ticker)
+        return jsonify({
+            "success": True,
+            "news_analysis": latest_news,
+            "ticker": ticker
+        })
+            
     except Exception as e:
         logging.error(f"新聞獲取失敗: {e}")
         return jsonify({"error": f"新聞獲取失敗: {str(e)}", "success": False})
+
+# 新聞連結驗證路由
+@app.route('/api/verify-news-links/<ticker>')
+def verify_news_links(ticker):
+    """驗證新聞連結的有效性"""
+    try:
+        import requests
+        from concurrent.futures import ThreadPoolExecutor
+        import time
+        
+        def check_url(url, timeout=5):
+            """檢查URL是否可訪問"""
+            try:
+                response = requests.head(url, timeout=timeout, allow_redirects=True)
+                return {
+                    'url': url,
+                    'status_code': response.status_code,
+                    'accessible': response.status_code < 400,
+                    'final_url': response.url,
+                    'response_time': time.time()
+                }
+            except Exception as e:
+                return {
+                    'url': url,
+                    'status_code': None,
+                    'accessible': False,
+                    'error': str(e),
+                    'response_time': time.time()
+                }
+        
+        # 獲取新聞數據
+        news_result = asyncio.run(news_analyzer.comprehensive_analysis(ticker))
+        
+        if not news_result.get('news_analysis', {}).get('articles'):
+            return jsonify({
+                "success": True,
+                "ticker": ticker,
+                "verified_links": [],
+                "message": "沒有找到新聞文章"
+            })
+        
+        articles = news_result['news_analysis']['articles'][:5]  # 只驗證前5篇
+        urls_to_check = [article.get('url') for article in articles if article.get('url') and article.get('url').startswith('http')]
+        
+        if not urls_to_check:
+            return jsonify({
+                "success": True,
+                "ticker": ticker,
+                "verified_links": [],
+                "message": "沒有找到有效的URL"
+            })
+        
+        # 並行檢查URL
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            verification_results = list(executor.map(check_url, urls_to_check))
+        
+        # 統計結果
+        accessible_count = sum(1 for result in verification_results if result['accessible'])
+        total_count = len(verification_results)
+        
+        return jsonify({
+            "success": True,
+            "ticker": ticker,
+            "verified_links": verification_results,
+            "summary": {
+                "total_links": total_count,
+                "accessible_links": accessible_count,
+                "success_rate": round((accessible_count / total_count) * 100, 1) if total_count > 0 else 0
+            },
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logging.error(f"新聞連結驗證失敗: {e}")
+        return jsonify({"error": f"新聞連結驗證失敗: {str(e)}", "success": False})
+
+# 新聞更新路由
+@app.route('/api/refresh-news/<ticker>')
+def refresh_news(ticker):
+    """刷新股票新聞數據"""
+    try:
+        latest_news = get_latest_news(ticker)
+        
+        return jsonify({
+            "success": True,
+            "ticker": ticker,
+            "news_data": {
+                "news_analysis": latest_news
+            },
+            "message": f"已刷新 {ticker} 的新聞數據，找到 {latest_news['news_count']} 篇最新新聞",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logging.error(f"刷新新聞失敗: {e}")
+        return jsonify({"error": f"刷新新聞失敗: {str(e)}", "success": False})
+
+# 收藏列表API端點
+@app.route('/api/watchlist', methods=['GET'])
+def get_watchlist():
+    """獲取收藏列表"""
+    try:
+        watchlist_data = watchlist.get_watchlist()
+        return jsonify({
+            "success": True,
+            "watchlist": watchlist_data
+        })
+    except Exception as e:
+        logging.error(f"獲取收藏列表失敗: {e}")
+        return jsonify({"error": f"獲取收藏列表失敗: {str(e)}", "success": False})
+
+@app.route('/api/watchlist/<ticker>', methods=['POST'])
+def add_to_watchlist(ticker):
+    """添加股票到收藏列表"""
+    try:
+        data = request.get_json() or {}
+        notes = data.get('notes', '收藏股票')
+        
+        success = watchlist.add_stock(ticker.upper(), notes)
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"已添加 {ticker.upper()} 到收藏列表"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": f"{ticker.upper()} 已在收藏列表中"
+            })
+    except Exception as e:
+        logging.error(f"添加收藏失敗: {e}")
+        return jsonify({"error": f"添加收藏失敗: {str(e)}", "success": False})
+
+@app.route('/api/watchlist/<ticker>', methods=['DELETE'])
+def remove_from_watchlist(ticker):
+    """從收藏列表移除股票"""
+    try:
+        success = watchlist.remove_stock(ticker.upper())
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"已從收藏列表移除 {ticker.upper()}"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": f"{ticker.upper()} 不在收藏列表中"
+            })
+    except Exception as e:
+        logging.error(f"移除收藏失敗: {e}")
+        return jsonify({"error": f"移除收藏失敗: {str(e)}", "success": False})
 
 if __name__ == '__main__':
     logging.info("啟動股票分析服務...")

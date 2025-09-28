@@ -148,22 +148,46 @@ class StockScanner:
             
             patterns_found = []
             
-            # 檢測 VCP 形態
-            vcp_detected, vcp_status, vcp_details = self.analyzer.detect_enhanced_vcp(stock_data)
-            if vcp_detected:
+            # 檢測基本 VCP 形態
+            basic_vcp_detected, basic_vcp_status, basic_vcp_stop_loss = self.analyzer.detect_vcp_pattern(stock_data)
+            
+            # 檢測增強 VCP 形態
+            enhanced_vcp_detected, enhanced_vcp_status, enhanced_vcp_details = self.analyzer.detect_enhanced_vcp(stock_data)
+            
+            # 如果任一VCP檢測成功，就加入推薦
+            if basic_vcp_detected or enhanced_vcp_detected:
+                # 動態計算信心度
+                if enhanced_vcp_detected:
+                    confidence_score = enhanced_vcp_details.get('score', 60)
+                    status = enhanced_vcp_status
+                    if basic_vcp_detected:
+                        status = f"{basic_vcp_status} + {enhanced_vcp_status}"
+                        confidence_score = max(confidence_score, 75)
+                else:
+                    confidence_score = 70  # 基本VCP信心度
+                    status = basic_vcp_status
+                
                 patterns_found.append({
                     "type": "VCP",
-                    "confidence": vcp_details.get('score', 0),
-                    "status": vcp_status,
-                    "details": vcp_details
+                    "confidence": confidence_score,
+                    "status": status,
+                    "details": enhanced_vcp_details if enhanced_vcp_detected else {}
                 })
             
             # 檢測 Cup & Handle 形態
             cup_handle_detected, cup_handle_status = self.analyzer.detect_cup_handle_pattern(stock_data)
             if cup_handle_detected:
+                # 根據形態狀態計算信心度
+                if "突破在即" in cup_handle_status:
+                    cup_confidence = 85
+                elif "形成" in cup_handle_status:
+                    cup_confidence = 75
+                else:
+                    cup_confidence = 65
+                    
                 patterns_found.append({
                     "type": "Cup_Handle",
-                    "confidence": 85,  # 預設信心度
+                    "confidence": cup_confidence,
                     "status": cup_handle_status,
                     "details": {}
                 })
@@ -323,7 +347,7 @@ class StockScanner:
         conn.close()
     
     def get_recommended_stocks(self, limit: int = 10) -> List[Dict]:
-        """獲取推薦股票"""
+        """獲取推薦股票，合併同一股票的多個形態"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -332,24 +356,48 @@ class StockScanner:
                    stop_loss_price, risk_score, detection_date
             FROM pattern_stocks 
             WHERE is_active = 1 
-            ORDER BY confidence_score DESC, detection_date DESC
-            LIMIT ?
-        ''', (limit,))
+            ORDER BY ticker, confidence_score DESC, detection_date DESC
+        ''')
         
-        results = []
+        # 合併同一股票的多個形態
+        stock_patterns = {}
         for row in cursor.fetchall():
+            ticker = row[0]
+            if ticker not in stock_patterns:
+                stock_patterns[ticker] = {
+                    "ticker": ticker,
+                    "pattern_types": set(),  # 使用set去重
+                    "confidence_score": row[2],
+                    "current_price": row[3],
+                    "stop_loss_price": row[4],
+                    "risk_score": row[5],
+                    "detection_date": row[6]
+                }
+            stock_patterns[ticker]["pattern_types"].add(row[1])
+            # 使用最高信心度
+            if row[2] > stock_patterns[ticker]["confidence_score"]:
+                stock_patterns[ticker]["confidence_score"] = row[2]
+        
+        # 轉換為結果格式
+        results = []
+        for ticker, data in stock_patterns.items():
+            # 將set轉為排序列表
+            pattern_types = sorted(list(data["pattern_types"]))
             results.append({
-                "ticker": row[0],
-                "pattern_type": row[1],
-                "confidence_score": row[2],
-                "current_price": row[3],
-                "stop_loss_price": row[4],
-                "risk_score": row[5],
-                "detection_date": row[6]
+                "ticker": data["ticker"],
+                "pattern_types": pattern_types,  # 傳遞列表而非字串
+                "confidence_score": data["confidence_score"],
+                "current_price": data["current_price"],
+                "stop_loss_price": data["stop_loss_price"],
+                "risk_score": data["risk_score"],
+                "detection_date": data["detection_date"]
             })
         
+        # 按信心度排序並限制數量
+        results.sort(key=lambda x: x["confidence_score"], reverse=True)
+        
         conn.close()
-        return results
+        return results[:limit]
     
     def get_dynamic_stock_list(self, max_stocks: int = 50) -> List[str]:
         """動態選擇股票列表"""

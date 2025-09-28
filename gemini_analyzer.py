@@ -71,12 +71,30 @@ class GeminiStockAnalyzer:
                 title = article.get('title', 'N/A')
                 source = article.get('source', 'Unknown Source')
                 url = article.get('url', '')
-                news_summary += f"{i}. {title}\n"
+                
+                # 確保URL有效且格式正確
+                if url and url.startswith('http'):
+                    # 創建可點擊的HTML連結
+                    clickable_link = f'<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
+                    news_summary += f"{i}. {clickable_link}\n"
+                else:
+                    news_summary += f"{i}. {title}\n"
+                
                 news_summary += f"   來源: {source}\n"
-                if url:
-                    news_summary += f"   連結: <a href='{url}' target='_blank'>{url}</a>\n"
+                
+                # 添加發布時間
+                published_time = article.get('publishedAt', article.get('published_at', ''))
+                if published_time:
+                    try:
+                        from datetime import datetime
+                        if 'T' in published_time:
+                            pub_date = datetime.fromisoformat(published_time.replace('Z', '+00:00'))
+                            news_summary += f"   發布時間: {pub_date.strftime('%Y-%m-%d %H:%M')}\n"
+                    except:
+                        pass
+                
                 if article.get('description'):
-                    news_summary += f"   摘要: {article.get('description', '')[:100]}...\n"
+                    news_summary += f"   摘要: {article.get('description', '')[:150]}...\n"
                 news_summary += "\n"
         
         sentiment_info = ""
@@ -102,7 +120,7 @@ class GeminiStockAnalyzer:
 """
         
         return f"""
-作為一個專業的股票分析師，請為 {ticker} 股票提供一份全面的投資分析報告。
+請為 {ticker} 股票提供一份全面的投資分析報告。
 
 技術分析數據：
 - 綜合評分: {technical_data.get('final_score', 'N/A')}
@@ -137,12 +155,14 @@ class GeminiStockAnalyzer:
 
 請確保：
 - 使用專業但易懂的語言，不要使用任何emoji表情符號
-- 在適當的地方引用新聞來源，並使用HTML格式的超連結：<a href="URL" target="_blank">新聞標題</a>
+- 在適當的地方引用新聞來源，並使用HTML格式的超連結：<a href="URL" target="_blank" rel="noopener noreferrer">新聞標題</a>
 - 提供完整的分析，不要截斷文字
 - 每段分析都要有具體的數據支撐
-- 所有新聞連結都應該是可點擊的HTML格式
+- 所有新聞連結都應該是可點擊的HTML格式，包含rel="noopener noreferrer"安全屬性
 - 明確標示各維度的分析結果和權重影響
 - 保持專業的投資分析報告風格
+- 確保所有引用的新聞連結都是最新且可訪問的
+- 在分析中明確提及新聞對股價的潛在影響
 """
 
     def _build_analysis_prompt(self, ticker: str, technical_data: Dict) -> str:
