@@ -195,10 +195,16 @@
                                 <i class="fas fa-star text-warning me-2"></i>
                                 今日推薦形態股
                             </h5>
-                            <button class="btn btn-outline-primary btn-sm" onclick="refreshRecommendations()" id="refreshBtn">
-                                <i class="fas fa-sync-alt me-1"></i>
-                                刷新推薦
-                            </button>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-outline-primary btn-sm" onclick="refreshRecommendations()" id="refreshBtn">
+                                    <i class="fas fa-sync-alt me-1"></i>
+                                    刷新推薦
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="initializeDatabase()" id="initBtn">
+                                    <i class="fas fa-database me-1"></i>
+                                    初始化數據
+                                </button>
+                            </div>
                         </div>
                         <div class="row">
                             {% for stock in recommended_stocks %}
@@ -1029,6 +1035,44 @@
                 // 恢復按鈕狀態
                 refreshBtn.innerHTML = originalText;
                 refreshBtn.disabled = false;
+            }
+        }
+
+        // 初始化數據庫
+        async function initializeDatabase() {
+            const initBtn = document.getElementById('initBtn');
+            const originalText = initBtn.innerHTML;
+            
+            try {
+                // 顯示載入狀態
+                initBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>初始化中...';
+                initBtn.disabled = true;
+                
+                // 觸發數據庫初始化
+                const response = await fetch('/api/initialize-database', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`數據庫初始化完成！\n發現 ${result.results.length} 個形態\n推薦股票: ${result.recommended_count} 支`);
+                    // 重新載入頁面以顯示新的推薦
+                    window.location.reload();
+                } else {
+                    alert('初始化失敗: ' + result.message);
+                }
+                
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                alert('初始化失敗，請稍後再試');
+            } finally {
+                // 恢復按鈕狀態
+                initBtn.innerHTML = originalText;
+                initBtn.disabled = false;
             }
         }
 

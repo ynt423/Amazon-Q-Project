@@ -22,6 +22,25 @@ app = Flask(__name__)
 analyzer = GrowthSignalAnalyzer()
 scanner = StockScanner()  # F3.1: 初始化股票掃描器
 
+def initialize_database():
+    """初始化數據庫，確保有推薦股票數據"""
+    try:
+        # 檢查是否有推薦股票
+        recommended = scanner.get_recommended_stocks(limit=1)
+        if not recommended:
+            logging.info("數據庫中沒有推薦股票，執行初始掃描...")
+            # 執行初始掃描
+            initial_stocks = scanner.popular_stocks[:20]  # 掃描前20支熱門股票
+            results = scanner.batch_scan_stocks(initial_stocks, max_stocks=20)
+            logging.info(f"初始掃描完成，發現 {len(results)} 個形態")
+        else:
+            logging.info(f"數據庫中已有 {len(scanner.get_recommended_stocks(limit=10))} 支推薦股票")
+    except Exception as e:
+        logging.error(f"初始化數據庫失敗: {e}")
+
+# 初始化數據庫
+initialize_database()
+
 # 初始化 AI 分析器
 ai_enhanced_analyzer = None
 news_analyzer = EnhancedNewsAnalyzer()
@@ -52,6 +71,12 @@ def index():
     # F3.2: 獲取推薦股票
     try:
         recommended_stocks = scanner.get_recommended_stocks(limit=8)
+        # 如果沒有推薦股票，嘗試執行快速掃描
+        if not recommended_stocks:
+            logging.info("沒有推薦股票，執行快速掃描...")
+            quick_stocks = scanner.popular_stocks[:10]  # 掃描前10支熱門股票
+            scanner.batch_scan_stocks(quick_stocks, max_stocks=10)
+            recommended_stocks = scanner.get_recommended_stocks(limit=8)
     except Exception as e:
         logging.error(f"獲取推薦股票失敗: {e}")
         recommended_stocks = []
@@ -135,7 +160,36 @@ def trigger_scan():
         logging.error(f"手動掃描失敗: {e}")
         return jsonify({"error": f"手動掃描失敗: {str(e)}", "success": False})
 
-# F3.4: 止損建議API
+# F3.4: 初始化數據庫API
+@app.route('/api/initialize-database', methods=['POST'])
+def initialize_database_endpoint():
+    """初始化數據庫端點 - 為新用戶提供初始數據"""
+    try:
+        logging.info("執行數據庫初始化...")
+        # 清理舊數據
+        scanner.cleanup_old_patterns(days=0)  # 清理所有舊數據
+        
+        # 執行初始掃描
+        initial_stocks = scanner.popular_stocks[:30]  # 掃描前30支熱門股票
+        results = scanner.batch_scan_stocks(initial_stocks, max_stocks=30)
+        
+        # 獲取推薦股票
+        recommended = scanner.get_recommended_stocks(limit=8)
+        
+        return jsonify({
+            'success': True,
+            'message': f'數據庫初始化完成，發現 {len(results)} 個形態',
+            'recommended_count': len(recommended),
+            'results': results
+        })
+    except Exception as e:
+        logging.error(f"數據庫初始化失敗: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'初始化失敗: {str(e)}'
+        }), 500
+
+# F3.5: 止損建議API
 @app.route('/api/stop-loss/<ticker>', methods=['GET'])
 def get_stop_loss_advice(ticker):
     """獲取止損建議"""
