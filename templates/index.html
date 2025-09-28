@@ -202,7 +202,7 @@
                                         <h6 class="card-title">{{ stock.ticker }}</h6>
                                         <div class="h5 text-primary">${{ "%.2f"|format(stock.current_price) }}</div>
                                         <span class="badge bg-{{ 'success' if stock.pattern_type == 'VCP' else 'primary' }} mb-2">
-                                            {{ stock.pattern_type }}
+                                            {{ stock.pattern_type.replace('_', ' & ') }}
                                         </span>
                                         <div class="small text-muted">
                                             信心度: {{ stock.confidence_score|int }}%<br>
@@ -416,22 +416,22 @@
         <div class="container">
             <div class="row">
                 <div class="col-12">
-                    <div class="text-center">
-                        <h6 class="text-muted mb-3">投資免責聲明</h6>
-                        <div class="small text-muted" style="line-height: 1.6;">
-                            <p class="mb-2">
-                                <strong>重要聲明：</strong>本系統提供的所有分析、建議和信號僅供教育和研究目的，不構成投資建議、財務建議或交易建議。
-                            </p>
-                            <p class="mb-2">
-                                <strong>風險警告：</strong>股票投資存在固有風險，可能導致本金損失。過往表現不代表未來結果。投資前請充分了解相關風險，並考慮您的財務狀況和投資目標。
-                            </p>
-                            <p class="mb-2">
-                                <strong>專業建議：</strong>在做出任何投資決定前，請諮詢合格的財務顧問或投資專業人士。本系統不承擔任何投資損失的責任。
-                            </p>
-                            <p class="mb-0">
-                                <strong>免責條款：</strong>使用本系統即表示您同意承擔所有投資風險，並免除本系統及其開發者對任何損失的責任。
-                            </p>
-                        </div>
+                    <div class="text-center mb-3">
+                        <h6 class="text-muted">投資免責聲明</h6>
+                    </div>
+                    <div class="small text-muted" style="line-height: 1.6; text-align: left;">
+                        <p class="mb-2">
+                            <strong>重要聲明：</strong>本系統提供的所有分析、建議和信號僅供教育和研究目的，不構成投資建議、財務建議或交易建議。
+                        </p>
+                        <p class="mb-2">
+                            <strong>風險警告：</strong>股票投資存在固有風險，可能導致本金損失。過往表現不代表未來結果。投資前請充分了解相關風險，並考慮您的財務狀況和投資目標。
+                        </p>
+                        <p class="mb-2">
+                            <strong>專業建議：</strong>在做出任何投資決定前，請諮詢合格的財務顧問或投資專業人士。本系統不承擔任何投資損失的責任。
+                        </p>
+                        <p class="mb-0">
+                            <strong>免責條款：</strong>使用本系統即表示您同意承擔所有投資風險，並免除本系統及其開發者對任何損失的責任。
+                        </p>
                     </div>
                 </div>
             </div>
@@ -473,6 +473,8 @@
                 this.hideResults();
 
                 try {
+                    console.log('Starting analysis for:', ticker, 'period:', this.currentTimeframe);
+                    
                     // 1. 先執行技術分析
                     const technicalResponse = await fetch('/signal/generate', {
                         method: 'POST',
@@ -484,6 +486,8 @@
                             period: this.currentTimeframe
                         })
                     });
+                    
+                    console.log('Technical response status:', technicalResponse.status);
 
                     if (!technicalResponse.ok) {
                         throw new Error(`HTTP ${technicalResponse.status}: ${technicalResponse.statusText}`);
@@ -530,7 +534,12 @@
                         this.showError(technicalData.error || '技術分析失敗');
                     }
                 } catch (error) {
-                    console.error('Error:', error);  // 調試信息
+                    console.error('Analysis Error:', error);
+                    console.error('Error details:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
                     this.showError(`錯誤: ${error.message}`);
                 } finally {
                     this.setLoading(false);
@@ -856,6 +865,7 @@
         }
 
         function quickAnalyze(ticker) {
+            console.log('Quick analyzing:', ticker);
             document.getElementById('tickerInput').value = ticker;
             window.stockAnalyzer.analyzeStock();
         }
