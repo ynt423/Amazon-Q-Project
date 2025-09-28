@@ -46,49 +46,49 @@ class StockScheduler:
         logger.info("- 每小時: 狀態檢查")
     
     def daily_morning_scan(self):
-        """每日早盤掃描"""
+        """每日早盤掃描 - 動態選擇30支股票"""
         logger.info("開始每日早盤掃描...")
         try:
-            # 掃描熱門股票
-            results = self.scanner.batch_scan_stocks()
-            logger.info(f"早盤掃描完成: 找到 {results['patterns_found']} 個形態")
+            # 動態掃描30支股票
+            results = self.scanner.batch_scan_stocks(max_stocks=30)
+            logger.info(f"早盤掃描完成: 掃描 {results['total_scanned']} 支股票，找到 {results['patterns_found']} 個形態")
         except Exception as e:
             logger.error(f"早盤掃描失敗: {e}")
     
     def daily_evening_scan(self):
-        """每日收盤掃描"""
+        """每日收盤掃描 - 動態選擇40支股票"""
         logger.info("開始每日收盤掃描...")
         try:
-            # 掃描熱門股票
-            results = self.scanner.batch_scan_stocks()
-            logger.info(f"收盤掃描完成: 找到 {results['patterns_found']} 個形態")
+            # 動態掃描40支股票
+            results = self.scanner.batch_scan_stocks(max_stocks=40)
+            logger.info(f"收盤掃描完成: 掃描 {results['total_scanned']} 支股票，找到 {results['patterns_found']} 個形態")
         except Exception as e:
             logger.error(f"收盤掃描失敗: {e}")
     
     def weekly_full_scan(self):
-        """每週完整掃描"""
+        """每週完整掃描 - 動態選擇80支股票"""
         logger.info("開始每週完整掃描...")
         try:
             # 清理舊記錄
             self.scanner.cleanup_old_patterns(days=7)
             
-            # 完整掃描所有股票
-            results = self.scanner.batch_scan_stocks()
+            # 動態掃描80支股票
+            results = self.scanner.batch_scan_stocks(max_stocks=80)
             logger.info(f"週掃描完成: 掃描 {results['total_scanned']} 支股票，找到 {results['patterns_found']} 個形態")
         except Exception as e:
             logger.error(f"週掃描失敗: {e}")
     
     def hourly_check(self):
-        """每小時檢查"""
+        """每小時檢查 - 動態補充"""
         try:
             # 檢查推薦股票數量
             recommended = self.scanner.get_recommended_stocks(limit=1)
             logger.info(f"當前推薦股票數量: {len(recommended)}")
             
-            # 如果推薦股票太少，觸發額外掃描
-            if len(recommended) < 3:
-                logger.info("推薦股票不足，觸發額外掃描...")
-                self.scanner.batch_scan_stocks(self.scanner.popular_stocks[:20])
+            # 如果推薦股票太少，觸發動態掃描
+            if len(recommended) < 5:
+                logger.info("推薦股票不足，觸發動態掃描...")
+                self.scanner.batch_scan_stocks(max_stocks=25)
                 
         except Exception as e:
             logger.error(f"每小時檢查失敗: {e}")

@@ -190,10 +190,16 @@
             <div class="col-12">
                 <div class="card signal-card">
                     <div class="card-body">
-                        <h5 class="card-title">
-                            <i class="fas fa-star text-warning me-2"></i>
-                            今日推薦形態股
-                        </h5>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-star text-warning me-2"></i>
+                                今日推薦形態股
+                            </h5>
+                            <button class="btn btn-outline-primary btn-sm" onclick="refreshRecommendations()" id="refreshBtn">
+                                <i class="fas fa-sync-alt me-1"></i>
+                                刷新推薦
+                            </button>
+                        </div>
                         <div class="row">
                             {% for stock in recommended_stocks %}
                             <div class="col-md-3 col-sm-6 mb-3">
@@ -986,6 +992,44 @@
 
         function getStopLossAdvice() {
             window.stockAnalyzer.getStopLossAdvice();
+        }
+
+        // 刷新推薦股票
+        async function refreshRecommendations() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            
+            try {
+                // 顯示載入狀態
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>掃描中...';
+                refreshBtn.disabled = true;
+                
+                // 觸發後台掃描
+                const response = await fetch('/api/trigger-scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ max_stocks: 30 })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 重新載入頁面以顯示新的推薦
+                    window.location.reload();
+                } else {
+                    alert('刷新失敗: ' + result.error);
+                }
+                
+            } catch (error) {
+                console.error('刷新推薦失敗:', error);
+                alert('刷新推薦失敗，請稍後再試');
+            } finally {
+                // 恢復按鈕狀態
+                refreshBtn.innerHTML = originalText;
+                refreshBtn.disabled = false;
+            }
         }
 
         // 初始化應用

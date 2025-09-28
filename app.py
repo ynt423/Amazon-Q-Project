@@ -114,6 +114,27 @@ def get_recommended_stocks():
         logging.error(f"獲取推薦股票失敗: {e}")
         return jsonify({"error": f"獲取推薦股票失敗: {str(e)}", "success": False})
 
+# F3.3: 手動觸發掃描API
+@app.route('/api/trigger-scan', methods=['POST'])
+def trigger_scan():
+    """手動觸發股票掃描"""
+    try:
+        max_stocks = request.json.get('max_stocks', 30) if request.json else 30
+        
+        logging.info(f"手動觸發掃描: {max_stocks} 支股票")
+        
+        # 執行動態掃描
+        results = scanner.batch_scan_stocks(max_stocks=max_stocks)
+        
+        return jsonify({
+            "success": True,
+            "message": f"掃描完成: 掃描 {results['total_scanned']} 支股票，找到 {results['patterns_found']} 個形態",
+            "scan_results": results
+        })
+    except Exception as e:
+        logging.error(f"手動掃描失敗: {e}")
+        return jsonify({"error": f"手動掃描失敗: {str(e)}", "success": False})
+
 # F3.4: 止損建議API
 @app.route('/api/stop-loss/<ticker>', methods=['GET'])
 def get_stop_loss_advice(ticker):
@@ -167,25 +188,6 @@ def get_stop_loss_advice(ticker):
         logging.error(f"計算止損建議失敗: {e}")
         return jsonify({"error": f"計算止損建議失敗: {str(e)}", "success": False})
 
-# F3.1: 手動觸發掃描API (管理員用)
-@app.route('/api/trigger-scan', methods=['POST'])
-def trigger_scan():
-    """手動觸發股票掃描"""
-    try:
-        data = request.get_json() or {}
-        stock_list = data.get('stocks', None)
-        
-        # 執行掃描
-        results = scanner.batch_scan_stocks(stock_list)
-        
-        return jsonify({
-            "success": True,
-            "message": "掃描完成",
-            "results": results
-        })
-    except Exception as e:
-        logging.error(f"觸發掃描失敗: {e}")
-        return jsonify({"error": f"觸發掃描失敗: {str(e)}", "success": False})
 
 # AI 分析路由
 @app.route('/api/ai-analysis', methods=['POST'])

@@ -22,20 +22,82 @@ class StockScanner:
         self.analyzer = GrowthSignalAnalyzer()
         self.setup_database()
         
-        # 熱門股票列表
+        # 擴大的股票掃描池 (200+ 股票)
         self.popular_stocks = [
-            # S&P 500 主要股票
+            # 科技巨頭 (FAANG + 其他)
             'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX',
             'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL', 'UBER', 'SPOT', 'SQ',
-            'NFLX', 'DIS', 'BABA', 'JD', 'PDD', 'BIDU', 'NTES', 'WB',
-            # 科技股
             'ORCL', 'CSCO', 'IBM', 'QCOM', 'TXN', 'AVGO', 'MU', 'AMAT',
+            'SNOW', 'PLTR', 'CRWD', 'ZS', 'OKTA', 'NET', 'DDOG', 'MDB',
+            'TWLO', 'ZM', 'DOCU', 'WDAY', 'NOW', 'TEAM', 'SPLK', 'ESTC',
+            
             # 金融股
             'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'AXP', 'V', 'MA',
-            # 醫療股
+            'COF', 'USB', 'PNC', 'TFC', 'BK', 'STT', 'BLK', 'SCHW',
+            'ICE', 'CME', 'NDAQ', 'MCO', 'SPGI', 'FIS', 'FISV', 'GPN',
+            
+            # 醫療保健股
             'JNJ', 'PFE', 'UNH', 'ABBV', 'MRK', 'TMO', 'ABT', 'LLY',
+            'DHR', 'BMY', 'AMGN', 'GILD', 'BIIB', 'REGN', 'VRTX', 'MRNA',
+            'ILMN', 'ISRG', 'DXCM', 'ZTS', 'EW', 'BSX', 'MDT', 'SYK',
+            
             # 消費股
-            'KO', 'PEP', 'WMT', 'PG', 'JNJ', 'HD', 'MCD', 'SBUX'
+            'KO', 'PEP', 'WMT', 'PG', 'HD', 'MCD', 'SBUX', 'NKE',
+            'DIS', 'CMCSA', 'VZ', 'T', 'CHTR', 'NFLX', 'ROKU', 'SPOT',
+            'AMZN', 'EBAY', 'ETSY', 'SHOP', 'SQ', 'PYPL', 'V', 'MA',
+            
+            # 工業股
+            'BA', 'CAT', 'GE', 'HON', 'MMM', 'RTX', 'UPS', 'FDX',
+            'LMT', 'NOC', 'GD', 'TDG', 'ETN', 'EMR', 'ITW', 'PH',
+            
+            # 能源股
+            'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'OXY', 'KMI', 'WMB',
+            'PSX', 'VLO', 'MPC', 'HES', 'DVN', 'PXD', 'MRO', 'APA',
+            
+            # 公用事業股
+            'NEE', 'DUK', 'SO', 'D', 'EXC', 'AEP', 'XEL', 'SRE',
+            'ES', 'PEG', 'WEC', 'AWK', 'ED', 'ETR', 'FE', 'AEE',
+            
+            # 房地產股
+            'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'EXR', 'AVB', 'EQR',
+            'MAA', 'UDR', 'CPT', 'ESS', 'BXP', 'SLG', 'KIM', 'REG',
+            
+            # 材料股
+            'LIN', 'APD', 'SHW', 'DD', 'DOW', 'ECL', 'PPG', 'NEM',
+            'FCX', 'SCCO', 'NUE', 'X', 'CLF', 'STLD', 'CMC', 'RS',
+            
+            # 通信股
+            'VZ', 'T', 'TMUS', 'CHTR', 'CMCSA', 'DIS', 'NFLX', 'ROKU',
+            'SPOT', 'P', 'SIRI', 'LBRDK', 'LBRDA', 'FWONK', 'FWONA', 'LSXMK',
+            
+            # 中概股
+            'BABA', 'JD', 'PDD', 'BIDU', 'NTES', 'WB', 'BILI', 'TME',
+            'VIPS', 'YMM', 'TAL', 'EDU', 'GOTU', 'COE', 'IQ', 'WB',
+            
+            # 新興成長股
+            'ROKU', 'ZM', 'DOCU', 'SNOW', 'PLTR', 'CRWD', 'ZS', 'OKTA',
+            'NET', 'DDOG', 'MDB', 'TWLO', 'WDAY', 'NOW', 'TEAM', 'SPLK',
+            'ESTC', 'DBX', 'BOX', 'WORK', 'SLACK', 'PINS', 'SNAP', 'TWTR',
+            
+            # 生物科技股
+            'GILD', 'BIIB', 'REGN', 'VRTX', 'MRNA', 'ILMN', 'ISRG', 'DXCM',
+            'ZTS', 'EW', 'BSX', 'MDT', 'SYK', 'ABBV', 'LLY', 'JNJ',
+            
+            # 半導體股
+            'NVDA', 'AMD', 'INTC', 'QCOM', 'TXN', 'AVGO', 'MU', 'AMAT',
+            'LRCX', 'KLAC', 'MCHP', 'ADI', 'MRVL', 'SWKS', 'QRVO', 'SLAB',
+            
+            # 電動車股
+            'TSLA', 'NIO', 'XPEV', 'LI', 'RIVN', 'LCID', 'F', 'GM',
+            'FORD', 'RIDE', 'WKHS', 'GOEV', 'HYLN', 'NKLA', 'RIDE', 'ARVL',
+            
+            # 太空股
+            'SPCE', 'MAXR', 'IRDM', 'VSAT', 'GILT', 'KTOS', 'AJRD', 'LMT',
+            'NOC', 'RTX', 'BA', 'HWM', 'TDG', 'LHX', 'LDOS', 'TXT',
+            
+            # 加密貨幣相關
+            'COIN', 'MSTR', 'SQ', 'PYPL', 'V', 'MA', 'JPM', 'BAC',
+            'WFC', 'GS', 'MS', 'C', 'AXP', 'BLK', 'ICE', 'CME'
         ]
     
     def setup_database(self):
@@ -167,10 +229,11 @@ class StockScanner:
                 "max_loss_percentage": 0
             }
     
-    def batch_scan_stocks(self, stock_list: List[str] = None) -> Dict:
-        """批次掃描股票"""
+    def batch_scan_stocks(self, stock_list: List[str] = None, max_stocks: int = 50) -> Dict:
+        """批次掃描股票 - 動態選擇"""
         if stock_list is None:
-            stock_list = self.popular_stocks
+            # 動態選擇股票：隨機選擇 + 熱門股票
+            stock_list = self.get_dynamic_stock_list(max_stocks)
         
         start_time = time.time()
         results = {
@@ -287,6 +350,24 @@ class StockScanner:
         
         conn.close()
         return results
+    
+    def get_dynamic_stock_list(self, max_stocks: int = 50) -> List[str]:
+        """動態選擇股票列表"""
+        import random
+        
+        # 確保熱門股票優先 (前20支)
+        priority_stocks = self.popular_stocks[:20]
+        
+        # 從剩餘股票中隨機選擇
+        remaining_stocks = self.popular_stocks[20:]
+        random_stocks = random.sample(remaining_stocks, min(max_stocks - 20, len(remaining_stocks)))
+        
+        # 合併並打亂順序
+        selected_stocks = priority_stocks + random_stocks
+        random.shuffle(selected_stocks)
+        
+        logger.info(f"動態選擇了 {len(selected_stocks)} 支股票進行掃描")
+        return selected_stocks[:max_stocks]
     
     def cleanup_old_patterns(self, days: int = 7):
         """清理舊的形態記錄"""
