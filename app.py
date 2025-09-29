@@ -14,8 +14,20 @@ from config import FLASK_DEBUG, FLASK_PORT, PERIOD_DAILY, PERIOD_WEEKLY, PERIOD_
 from stock_scanner import StockScanner  # F3.1: 導入股票掃描器
 from gemini_analyzer import GeminiEnhancedAnalyzer
 from news_analyzer import EnhancedNewsAnalyzer
-from simple_news import get_latest_news
+# Removed simple_news import - using news_analyzer instead
 from watchlist import Watchlist
+
+# Initialize news analyzer
+news_analyzer = EnhancedNewsAnalyzer()
+
+async def get_latest_news(ticker):
+    """Get latest news using the enhanced news analyzer"""
+    try:
+        result = await news_analyzer.comprehensive_analysis(ticker)
+        return result.get('news_analysis', {})
+    except Exception as e:
+        logging.error(f"News analysis failed: {e}")
+        return {"error": str(e), "articles": []}
 
 # 這是為了解決 U3.1 的模擬數據 (熱門股票建議)
 TICKER_SUGGESTIONS = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMD", "META", "AMZN"] 
@@ -297,7 +309,7 @@ def ai_analysis():
             return jsonify(enhanced_result)
         else:
             # 回退到純技術分析，但添加新聞分析
-            latest_news = get_latest_news(ticker)
+            latest_news = asyncio.run(get_latest_news(ticker))
             return jsonify({
                 **technical_result,
                 "news_analysis": latest_news,
@@ -314,7 +326,7 @@ def ai_analysis():
 def get_news(ticker):
     """獲取股票新聞"""
     try:
-        latest_news = get_latest_news(ticker)
+        latest_news = asyncio.run(get_latest_news(ticker))
         return jsonify({
             "success": True,
             "news_analysis": latest_news,
@@ -405,7 +417,7 @@ def verify_news_links(ticker):
 def refresh_news(ticker):
     """刷新股票新聞數據"""
     try:
-        latest_news = get_latest_news(ticker)
+        latest_news = asyncio.run(get_latest_news(ticker))
         
         return jsonify({
             "success": True,
