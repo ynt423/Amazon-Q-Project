@@ -139,17 +139,26 @@
             line-height: 1.8;
             font-size: 1.1em;
             word-wrap: break-word;
-            word-break: break-word;
+            word-break: keep-all;
             hyphens: auto;
-            text-align: justify;
+            text-align: left;
             white-space: pre-wrap;
             overflow-wrap: break-word;
             margin-top: -0.5rem;
+            word-spacing: normal;
+            letter-spacing: normal;
         }
         
         .ai-analysis-content p {
             margin-bottom: 1rem;
             text-indent: 0;
+            text-align: left;
+            font-size: 1.1em;
+            line-height: 1.8;
+            font-weight: normal;
+            white-space: normal;
+            word-break: keep-all;
+            overflow-wrap: break-word;
         }
         
         .ai-analysis-content p:first-child {
@@ -1159,24 +1168,46 @@
                     .replace(/\n{3,}/g, '\n\n')  // 限制連續換行
                     .trim();
                 
-                // 按標題分段處理
-                let formatted = cleanedText
+                // 先處理所有不應該換行的情況
+                let processedText = cleanedText
                     // 處理HTML連結（保持原有格式）
                     .replace(/<a\s+href="([^"]+)"\s+target="_blank"[^>]*>([^<]+)<\/a>/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary fw-bold">$2 <i class="fas fa-external-link-alt ms-1"></i></a>')
                     // 處理主要標題 (## 開頭)
                     .replace(/##\s*(.+?)(?=\n|$)/g, '<h4 class="text-primary mt-4 mb-3">$1</h4>')
                     // 處理副標題 (** 開頭)
                     .replace(/\*\*(.+?)\*\*/g, '<strong class="text-dark">$1</strong>')
+                    // 處理12點結構標題 (1. 開場總結 格式)
+                    .replace(/(\d+\.\s*[^：]+：)/g, '<h6 class="text-primary mt-3 mb-2 fw-bold">$1</h6>')
                     // 處理數字標題 (1. 2. 3. 開頭)
-                    .replace(/(\d+\.\s*[^<\n]+?)(?=\n|$)/g, '<h6 class="text-secondary mt-3 mb-2">$1</h6>')
+                    .replace(/(\d+\.\s*[^<\n]+?)(?=\n|$)/g, '<h6 class="text-secondary mt-3 mb-2">$1</h6>');
+                
+                // 強制修復所有句子中間的換行
+                processedText = processedText
+                    // 修復括號內換行
+                    .replace(/\(([^)]*)\n([^)]*)\)/g, '($1$2)')
+                    // 修復數字和標點符號之間的分行
+                    .replace(/(\d+\.?\d*)\s*\n\s*([，。！？；：])/g, '$1$2')
+                    .replace(/(\d+\.?\d*)\s*\n\s*([^。！？；：\n])/g, '$1$2')
+                    // 修復標點符號後的分行
+                    .replace(/([，。！？；：])\s*\n\s*([^。！？；：\n])/g, '$1$2')
+                    // 修復逗號後的分行
+                    .replace(/([，])\s*\n\s*/g, '$1')
+                    // 修復中文句子中間的換行 - 更全面的模式
+                    .replace(/([^。！？；：\n])\s*\n\s*([^。！？；：\n<])/g, '$1$2')
+                    // 修復英文句子中間的換行
+                    .replace(/([a-zA-Z0-9.,;:!?])\s*\n\s*([a-zA-Z0-9.,;:!?])/g, '$1 $2')
+                    // 修復混合中英文句子
+                    .replace(/([a-zA-Z0-9.,;:!?])\s*\n\s*([^。！？；：\n<])/g, '$1 $2')
+                    .replace(/([^。！？；：\n<])\s*\n\s*([a-zA-Z0-9.,;:!?])/g, '$1 $2');
+                
+                // 處理段落分隔和合理的換行
+                let formatted = processedText
                     // 處理段落分隔 - 只在真正的段落間添加段落標籤
                     .replace(/\n\n+/g, '</p><p class="mb-3">')
                     // 處理單行換行 - 只在句子結束後才換行
                     .replace(/([。！？；])\n/g, '$1<br>')
                     // 處理其他合理的換行點
-                    .replace(/([：:])\n/g, '$1<br>')
-                    // 移除不必要的單行換行，避免在括號中間換行
-                    .replace(/([^。！？；：\n])\n([^<\n])/g, '$1 $2');
+                    .replace(/([：:])\n/g, '$1<br>');
                 
                 // 包裝在段落標籤中
                 formatted = '<p class="mb-3">' + formatted + '</p>';
