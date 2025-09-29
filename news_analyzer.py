@@ -20,6 +20,7 @@ class NewsAnalyzer:
         # 新聞API配置
         self.news_api_key = os.getenv('NEWS_API_KEY')
         self.alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+        self.tiingo_api_key = os.getenv('TIINGO_API_KEY')
         
         # 免費新聞源
         self.free_sources = [
@@ -34,26 +35,32 @@ class NewsAnalyzer:
             all_articles = []
             current_time = time.time()
             
-            # 1. 嘗試Yahoo Finance API
-            yahoo_articles = await self._get_yahoo_finance_news(ticker)
-            if yahoo_articles:
-                all_articles.extend(yahoo_articles)
+            # 1. 嘗試Tiingo API (優先級最高)
+            if self.tiingo_api_key and self.tiingo_api_key != 'your_tiingo_api_key_here':
+                tiingo_articles = await self._get_tiingo_news(ticker, days)
+                if tiingo_articles:
+                    all_articles.extend(tiingo_articles)
+                    self.logger.info(f"Tiingo API: 獲取到 {len(tiingo_articles)} 篇新聞")
             
-            # 2. 如果文章不够，嘗試其他API
-            if len(all_articles) < 3:
-                if self.news_api_key:
-                    result = await self._get_newsapi_news(ticker, days)
-                    all_articles.extend(result.get('articles', []))
-                elif self.alpha_vantage_key:
-                    result = await self._get_alpha_vantage_news(ticker, days)
-                    all_articles.extend(result.get('articles', []))
+            # 2. 嘗試RSS新聞源 (最可靠)
+            rss_articles = await self._get_rss_news(ticker)
+            if rss_articles:
+                all_articles.extend(rss_articles)
+                self.logger.info(f"RSS News: 獲取到 {len(rss_articles)} 篇新聞")
             
-            # 3. 如果仍然不够，使用備用方案
-            if len(all_articles) < 2:
+            # 3. 嘗試網頁爬蟲 (可靠)
+            web_articles = await self._get_web_scraped_news(ticker)
+            if web_articles:
+                all_articles.extend(web_articles)
+                self.logger.info(f"Web Scraping: 獲取到 {len(web_articles)} 篇新聞")
+            
+            # 4. 如果文章不够，使用備用方案 (僅在必要時)
+            if len(all_articles) < 1:
                 backup_result = await self._get_free_news(ticker, days)
                 all_articles.extend(backup_result.get('articles', []))
+                self.logger.info(f"Backup News: 獲取到 {len(backup_result.get('articles', []))} 篇新聞")
             
-            # 4. 驗證所有連結
+            # 7. 驗證所有連結
             verified_articles = await self._verify_article_links(all_articles)
             
             # 5. 去重和排序
@@ -69,8 +76,34 @@ class NewsAnalyzer:
             # 按時間排序（最新的在前）
             unique_articles.sort(key=lambda x: x.get('publishedAt', ''), reverse=True)
             
-            # 只保留前5篇
-            final_articles = unique_articles[:5]
+            # 過濾出最近7天的新聞，優先選擇最新的
+            current_date = datetime.now()
+            recent_articles = []
+            
+            for article in unique_articles:
+                try:
+                    # 嘗試解析發布時間
+                    published_str = article.get('publishedAt', '')
+                    if published_str:
+                        # 處理不同的時間格式
+                        if 'T' in published_str:
+                            published_date = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                        else:
+                            published_date = datetime.fromisoformat(published_str)
+                        
+                        # 檢查是否在最近7天內
+                        if (current_date - published_date).days <= 7:
+                            recent_articles.append(article)
+                    else:
+                        # 如果沒有時間信息，假設是最近的
+                        recent_articles.append(article)
+                        
+                except Exception as e:
+                    # 如果時間解析失敗，假設是最近的
+                    recent_articles.append(article)
+            
+            # 只保留前5篇最新新聞
+            final_articles = recent_articles[:5]
             
             news_data = {
                 "ticker": ticker,
@@ -246,10 +279,12 @@ class NewsAnalyzer:
             # 更新的RSS源，確保連結有效
             rss_urls = [
                 f'https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US',
-                'https://feeds.marketwatch.com/marketwatch/topstories/',
+                f'https://feeds.marketwatch.com/marketwatch/topstories/?company={ticker}',
                 'https://feeds.bloomberg.com/markets/news.rss',
                 'https://www.cnbc.com/id/100003114/device/rss/rss.html',  # CNBC Markets
-                'https://feeds.reuters.com/reuters/businessNews'  # Reuters Business
+                'https://feeds.reuters.com/reuters/businessNews',  # Reuters Business
+                f'https://seekingalpha.com/api/sa/combined/{ticker}.xml',  # Seeking Alpha
+                'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC&region=US&lang=en-US'  # S&P 500 for market context
             ]
             
             articles = []
@@ -267,7 +302,9 @@ class NewsAnalyzer:
                         if (ticker.lower() in title_lower or 
                             ticker.lower() in summary_lower or
                             # 對於主要指數，也包含相關新聞
-                            any(keyword in title_lower for keyword in ['market', 'stock', 'trading', 'earnings'])):
+                            any(keyword in title_lower for keyword in ['market', 'stock', 'trading', 'earnings', 'apple', 'tech', 'nasdaq', 'dow', 'sp500']) or
+                            # 對於AAPL，也包含Apple相關新聞
+                            (ticker.upper() == 'AAPL' and 'apple' in title_lower)):
                             
                             # 驗證連結有效性
                             article_url = entry.link
@@ -470,30 +507,271 @@ class NewsAnalyzer:
                 not url.startswith('http') or 
                 'example.com' in url or 
                 len(url) < 15 or
-                'localhost' in url):
+                'localhost' in url or
+                'placeholder' in url.lower()):
                 continue
             
-            # 實際驗證連結（使用GET請求確保頁面存在）
+            # 簡化的連結驗證（更寬鬆的檢查）
             try:
-                response = requests.get(url, timeout=8, allow_redirects=True)
+                # 只使用HEAD請求進行快速檢查
+                head_response = requests.head(url, timeout=3, allow_redirects=True)
                 
-                # 檢查狀態碼和頁面內容
-                if (response.status_code < 400 and 
-                    'not found' not in response.text.lower() and
-                    'page not found' not in response.text.lower() and
-                    len(response.text) > 1000):  # 確保有實際內容
-                    
+                # 如果HEAD請求成功，認為連結有效
+                if head_response.status_code < 400:
+                    article['url'] = head_response.url  # 更新為最終URL
                     article['link_verified'] = True
                     article['last_verified'] = datetime.now().isoformat()
-                    article['final_url'] = response.url
-                    article['content_length'] = len(response.text)
+                    article['final_url'] = head_response.url
+                    article['status_code'] = head_response.status_code
+                    verified_articles.append(article)
+                else:
+                    # 即使HEAD失敗，也嘗試添加（可能是某些網站不支援HEAD）
+                    article['link_verified'] = False
+                    article['last_verified'] = datetime.now().isoformat()
+                    article['status_code'] = head_response.status_code
                     verified_articles.append(article)
                     
+            except requests.exceptions.Timeout:
+                # 超時也添加文章，但標記為未驗證
+                article['link_verified'] = False
+                article['last_verified'] = datetime.now().isoformat()
+                article['status_code'] = 'timeout'
+                verified_articles.append(article)
+            except requests.exceptions.ConnectionError:
+                # 連接錯誤也添加文章，但標記為未驗證
+                article['link_verified'] = False
+                article['last_verified'] = datetime.now().isoformat()
+                article['status_code'] = 'connection_error'
+                verified_articles.append(article)
             except Exception as e:
+                # 其他錯誤也添加文章，但標記為未驗證
                 self.logger.warning(f"連結驗證失敗 {url}: {e}")
-                continue
+                article['link_verified'] = False
+                article['last_verified'] = datetime.now().isoformat()
+                article['status_code'] = 'error'
+                verified_articles.append(article)
         
         return verified_articles
+    
+    async def _get_tiingo_news(self, ticker: str, days: int = 7) -> List[Dict]:
+        """使用Tiingo API獲取新聞"""
+        try:
+            if not self.tiingo_api_key or self.tiingo_api_key == 'your_tiingo_api_key_here':
+                return []
+            
+            # 計算日期範圍
+            from datetime import datetime, timedelta
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            
+            # 構建API請求
+            url = 'https://api.tiingo.com/tiingo/news'
+            params = {
+                'tickers': ticker.lower(),
+                'startDate': start_date.strftime('%Y-%m-%d'),
+                'endDate': end_date.strftime('%Y-%m-%d'),
+                'limit': 10
+            }
+            headers = {
+                'Authorization': f'Token {self.tiingo_api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                articles = []
+                
+                for item in data:
+                    # 解析發布時間
+                    published_date = item.get('publishedDate', '')
+                    if published_date:
+                        try:
+                            # 處理ISO格式時間
+                            if 'T' in published_date:
+                                published_date = published_date.replace('Z', '+00:00')
+                        except:
+                            published_date = datetime.now().isoformat()
+                    else:
+                        published_date = datetime.now().isoformat()
+                    
+                    articles.append({
+                        'title': item.get('title', ''),
+                        'description': item.get('description', '')[:200] + '...' if len(item.get('description', '')) > 200 else item.get('description', ''),
+                        'url': item.get('url', ''),
+                        'publishedAt': published_date,
+                        'source': item.get('source', 'Tiingo'),
+                        'category': 'Financial News',
+                        'verified': True,  # Tiingo links are generally reliable
+                        'tickers': item.get('tickers', []),
+                        'tags': item.get('tags', []),
+                        'crawl_date': item.get('crawlDate', ''),
+                        'article_id': item.get('id', '')
+                    })
+                
+                self.logger.info(f"Tiingo API: 獲取到 {len(articles)} 篇新聞")
+                return articles
+                
+            else:
+                self.logger.warning(f"Tiingo API 請求失敗: {response.status_code} - {response.text}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Tiingo API 獲取失敗: {e}")
+            return []
+    
+    async def _get_web_scraped_news(self, ticker: str) -> List[Dict]:
+        """使用網頁爬蟲獲取最新新聞"""
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            
+            articles = []
+            
+            # 嘗試多個新聞源
+            news_sources = [
+                {
+                    'url': f'https://finance.yahoo.com/quote/{ticker}',
+                    'title_selector': 'h3 a, .js-content-viewer a, [data-module="Stream"] a',
+                    'link_selector': 'h3 a, .js-content-viewer a, [data-module="Stream"] a',
+                    'source_name': 'Yahoo Finance'
+                },
+                {
+                    'url': f'https://www.marketwatch.com/investing/stock/{ticker}',
+                    'title_selector': '.article__headline a, .headline a',
+                    'link_selector': '.article__headline a, .headline a',
+                    'source_name': 'MarketWatch'
+                }
+            ]
+            
+            for source in news_sources:
+                try:
+                    response = requests.get(source['url'], timeout=10, headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    })
+                    
+                    if response.status_code == 200:
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        
+                        # 查找新聞標題和連結
+                        title_elements = soup.select(source['title_selector'])
+                        
+                        for element in title_elements[:5]:  # 限制前5篇
+                            title = element.get_text(strip=True)
+                            link = element.get('href', '')
+                            
+                            # 處理相對連結
+                            if link.startswith('/'):
+                                if 'yahoo.com' in source['url']:
+                                    link = f"https://finance.yahoo.com{link}"
+                                elif 'marketwatch.com' in source['url']:
+                                    link = f"https://www.marketwatch.com{link}"
+                            
+                            if title and link and len(title) > 10:
+                                # 嘗試從頁面中提取實際發布時間
+                                published_time = await self._extract_article_date(element, source['url'])
+                                
+                                articles.append({
+                                    'title': title,
+                                    'url': link,
+                                    'source': source['source_name'],
+                                    'publishedAt': published_time,
+                                    'description': title[:150] + '...',
+                                    'category': 'News',
+                                    'verified': False  # 稍後驗證
+                                })
+                                
+                except Exception as e:
+                    self.logger.warning(f"網頁爬蟲失敗 {source['url']}: {e}")
+                    continue
+            
+            return articles
+            
+        except ImportError:
+            self.logger.warning("BeautifulSoup 未安裝，跳過網頁爬蟲")
+            return []
+        except Exception as e:
+            self.logger.error(f"網頁爬蟲新聞獲取失敗: {e}")
+            return []
+    
+    async def _extract_article_date(self, element, source_url: str) -> str:
+        """從新聞元素中提取實際發布時間"""
+        try:
+            # 嘗試從父元素中查找時間信息
+            parent = element.parent
+            if parent:
+                # 查找常見的時間選擇器
+                time_selectors = [
+                    'time',
+                    '.time',
+                    '.date',
+                    '.timestamp',
+                    '[datetime]',
+                    '.published',
+                    '.publish-date'
+                ]
+                
+                for selector in time_selectors:
+                    time_element = parent.select_one(selector)
+                    if time_element:
+                        # 嘗試從datetime屬性獲取
+                        datetime_attr = time_element.get('datetime')
+                        if datetime_attr:
+                            return datetime_attr
+                        
+                        # 嘗試從文本內容獲取
+                        time_text = time_element.get_text(strip=True)
+                        if time_text:
+                            # 嘗試解析時間文本
+                            parsed_time = self._parse_time_text(time_text)
+                            if parsed_time:
+                                return parsed_time
+            
+            # 如果無法提取時間，使用當前時間作為fallback
+            return datetime.now().isoformat()
+            
+        except Exception as e:
+            self.logger.warning(f"提取文章時間失敗: {e}")
+            return datetime.now().isoformat()
+    
+    def _parse_time_text(self, time_text: str) -> Optional[str]:
+        """解析時間文本為ISO格式"""
+        try:
+            import re
+            from dateutil import parser
+            
+            # 清理時間文本
+            time_text = time_text.strip()
+            
+            # 嘗試直接解析
+            try:
+                parsed_date = parser.parse(time_text)
+                return parsed_date.isoformat()
+            except:
+                pass
+            
+            # 嘗試匹配常見格式
+            patterns = [
+                r'(\d{1,2})/(\d{1,2})/(\d{4})',  # MM/DD/YYYY
+                r'(\d{4})-(\d{1,2})-(\d{1,2})',  # YYYY-MM-DD
+                r'(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})',  # DD Mon YYYY
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, time_text)
+                if match:
+                    try:
+                        parsed_date = parser.parse(match.group(0))
+                        return parsed_date.isoformat()
+                    except:
+                        continue
+            
+            return None
+            
+        except Exception as e:
+            self.logger.warning(f"解析時間文本失敗: {e}")
+            return None
     
     async def get_market_overview(self) -> Dict:
         """獲取市場概況"""

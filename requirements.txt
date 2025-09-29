@@ -35,3 +35,4 @@ anyio>=4.0.0
 # Utilities
 tqdm>=4.65.0
 distro>=1.8.0
+python-dateutil>=2.8.0

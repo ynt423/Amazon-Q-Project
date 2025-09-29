@@ -133,6 +133,50 @@
         .ai-loading {
             display: none;
         }
+        
+        /* AI Analysis Content Styling */
+        .ai-analysis-content {
+            line-height: 1.8;
+            font-size: 1.1em;
+            word-wrap: break-word;
+            word-break: break-word;
+            hyphens: auto;
+            text-align: justify;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            margin-top: -0.5rem;
+        }
+        
+        .ai-analysis-content p {
+            margin-bottom: 1rem;
+            text-indent: 0;
+        }
+        
+        .ai-analysis-content p:first-child {
+            margin-top: 0;
+        }
+        
+        .ai-analysis-content h4 {
+            margin-top: 1rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .ai-analysis-content h6 {
+            margin-top: 0.75rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .ai-analysis-content strong {
+            font-weight: 600;
+        }
+        
+        /* Reduce padding in AI analysis card */
+        #aiAnalysisContent .card-body {
+            padding-top: 1rem;
+            padding-bottom: 1.5rem;
+        }
         .chart-container {
             height: 520px;
             margin: 15px 0;
@@ -337,50 +381,34 @@
                             <!-- 技術分析權重表 -->
                             <div class="mt-4">
                                 <h6 class="text-info mb-3">📊 技術分析權重分配</h6>
-                                <div class="row">
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="h6 text-primary">20%</div>
-                                            <div class="small text-muted">RS評級</div>
-                                        </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="text-center flex-fill">
+                                        <div class="h6 text-primary">20%</div>
+                                        <div class="small text-muted">RS評級</div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="h6 text-success">15%</div>
-                                            <div class="small text-muted">RSI</div>
-                                        </div>
+                                    <div class="text-center flex-fill">
+                                        <div class="h6 text-success">15%</div>
+                                        <div class="small text-muted">RSI</div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="h6 text-warning">15%</div>
-                                            <div class="small text-muted">MACD</div>
-                                        </div>
+                                    <div class="text-center flex-fill">
+                                        <div class="h6 text-warning">15%</div>
+                                        <div class="small text-muted">MACD</div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="h6 text-info">10%</div>
-                                            <div class="small text-muted">布林通道</div>
-                                        </div>
+                                    <div class="text-center flex-fill">
+                                        <div class="h6 text-info">10%</div>
+                                        <div class="small text-muted">布林通道</div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="h6 text-secondary">10%</div>
-                                            <div class="small text-muted">成交量</div>
-                                        </div>
+                                    <div class="text-center flex-fill">
+                                        <div class="h6 text-secondary">10%</div>
+                                        <div class="small text-muted">成交量</div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="h6 text-dark">10%</div>
-                                            <div class="small text-muted">形態獎勵</div>
-                                        </div>
+                                    <div class="text-center flex-fill">
+                                        <div class="h6 text-dark">10%</div>
+                                        <div class="small text-muted">形態獎勵</div>
                                     </div>
-                                </div>
-                                <div class="row mt-2">
-                                    <div class="col-md-12">
-                                        <div class="text-center">
-                                            <div class="h6 text-danger">20%</div>
-                                            <div class="small text-muted">大盤趨勢過濾</div>
-                                        </div>
+                                    <div class="text-center flex-fill">
+                                        <div class="h6 text-danger">20%</div>
+                                        <div class="small text-muted">大盤趨勢過濾</div>
                                     </div>
                                 </div>
                             </div>
@@ -943,7 +971,7 @@
                         <div class="mb-4">
                             <div class="card">
                                 <div class="card-body">
-                                    <div class="ai-analysis-content" style="line-height: 1.8; font-size: 1.1em; word-wrap: break-word; max-height: none; overflow: visible;">
+                                    <div class="ai-analysis-content">
                                         ${formattedAnalysis}
                                     </div>
                                 </div>
@@ -955,7 +983,7 @@
                         <div class="mb-4">
                             <div class="card">
                                 <div class="card-body">
-                                    <div class="ai-analysis-content" style="line-height: 1.8; font-size: 1.1em; word-wrap: break-word; max-height: none; overflow: visible;">
+                                    <div class="ai-analysis-content">
                                         ${data.ai_enhanced.natural_analysis}
                                     </div>
                                 </div>
@@ -1124,8 +1152,15 @@
             formatAIAnalysis(text) {
                 if (!text) return '';
                 
+                // 清理文本，移除多餘的空白和換行
+                let cleanedText = text
+                    .replace(/\r\n/g, '\n')  // 統一換行符
+                    .replace(/\r/g, '\n')     // 統一換行符
+                    .replace(/\n{3,}/g, '\n\n')  // 限制連續換行
+                    .trim();
+                
                 // 按標題分段處理
-                let formatted = text
+                let formatted = cleanedText
                     // 處理HTML連結（保持原有格式）
                     .replace(/<a\s+href="([^"]+)"\s+target="_blank"[^>]*>([^<]+)<\/a>/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary fw-bold">$2 <i class="fas fa-external-link-alt ms-1"></i></a>')
                     // 處理主要標題 (## 開頭)
@@ -1134,10 +1169,14 @@
                     .replace(/\*\*(.+?)\*\*/g, '<strong class="text-dark">$1</strong>')
                     // 處理數字標題 (1. 2. 3. 開頭)
                     .replace(/(\d+\.\s*[^<\n]+?)(?=\n|$)/g, '<h6 class="text-secondary mt-3 mb-2">$1</h6>')
-                    // 處理段落分隔
-                    .replace(/\n\n/g, '</p><p class="mb-3">')
-                    // 處理單行換行
-                    .replace(/\n/g, '<br>');
+                    // 處理段落分隔 - 只在真正的段落間添加段落標籤
+                    .replace(/\n\n+/g, '</p><p class="mb-3">')
+                    // 處理單行換行 - 只在句子結束後才換行
+                    .replace(/([。！？；])\n/g, '$1<br>')
+                    // 處理其他合理的換行點
+                    .replace(/([：:])\n/g, '$1<br>')
+                    // 移除不必要的單行換行，避免在括號中間換行
+                    .replace(/([^。！？；：\n])\n([^<\n])/g, '$1 $2');
                 
                 // 包裝在段落標籤中
                 formatted = '<p class="mb-3">' + formatted + '</p>';

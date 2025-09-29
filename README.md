@@ -86,6 +86,9 @@ NEWS_API_KEY=your_newsapi_key_here
 ALPHA_VANTAGE_KEY=your_alpha_vantage_key_here
 FINNHUB_KEY=your_finnhub_key_here
 
+# Tiingo API (推薦用於高質量新聞)
+TIINGO_API_KEY=your_tiingo_api_key_here
+
 # 系統配置
 FLASK_DEBUG=True
 FLASK_PORT=5001

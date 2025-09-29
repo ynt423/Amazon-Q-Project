@@ -73,12 +73,15 @@ class GeminiStockAnalyzer:
                 url = article.get('url', '')
                 
                 # 確保URL有效且格式正確
+                verified = article.get('link_verified', False)
                 if url and url.startswith('http'):
                     # 創建可點擊的HTML連結
                     clickable_link = f'<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
+                    if verified:
+                        clickable_link += " [已驗證]"
                     news_summary += f"{i}. {clickable_link}\n"
                 else:
-                    news_summary += f"{i}. {title}\n"
+                    news_summary += f"{i}. {title} [無有效連結]\n"
                 
                 news_summary += f"   來源: {source}\n"
                 
