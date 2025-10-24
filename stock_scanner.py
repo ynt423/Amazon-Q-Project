@@ -21,83 +21,116 @@ class StockScanner:
         self.db_path = db_path
         self.analyzer = GrowthSignalAnalyzer()
         self.setup_database()
+        self.scanned_today = set()  # 今日已掃描股票記錄
         
-        # 擴大的股票掃描池 (200+ 股票)
+        # 全球500大企業股票池 (500+ 股票)
         self.popular_stocks = [
-            # 科技巨頭 (FAANG + 其他)
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX',
-            'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL', 'UBER', 'SPOT', 'SQ',
-            'ORCL', 'CSCO', 'IBM', 'QCOM', 'TXN', 'AVGO', 'MU', 'AMAT',
-            'SNOW', 'PLTR', 'CRWD', 'ZS', 'OKTA', 'NET', 'DDOG', 'MDB',
-            'TWLO', 'ZM', 'DOCU', 'WDAY', 'NOW', 'TEAM', 'SPLK', 'ESTC',
+            # 美國科技巨頭 (FAANG + 大型科技股)
+            'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX',
+            'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL', 'UBER', 'SPOT', 'ORCL', 'CSCO',
+            'IBM', 'QCOM', 'TXN', 'AVGO', 'MU', 'AMAT', 'SNOW', 'PLTR', 'CRWD',
+            'ZS', 'OKTA', 'NET', 'DDOG', 'MDB', 'TWLO', 'ZM', 'DOCU', 'WDAY',
+            'NOW', 'TEAM', 'SPLK', 'ESTC', 'DBX', 'BOX', 'PINS', 'SNAP', 'TWTR',
             
-            # 金融股
-            'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'AXP', 'V', 'MA',
-            'COF', 'USB', 'PNC', 'TFC', 'BK', 'STT', 'BLK', 'SCHW',
-            'ICE', 'CME', 'NDAQ', 'MCO', 'SPGI', 'FIS', 'FISV', 'GPN',
+            # 美國金融服務
+            'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'AXP', 'V', 'MA', 'COF',
+            'USB', 'PNC', 'TFC', 'BK', 'STT', 'BLK', 'SCHW', 'ICE', 'CME',
+            'NDAQ', 'MCO', 'SPGI', 'FIS', 'FISV', 'GPN', 'COIN', 'MSTR',
             
-            # 醫療保健股
-            'JNJ', 'PFE', 'UNH', 'ABBV', 'MRK', 'TMO', 'ABT', 'LLY',
-            'DHR', 'BMY', 'AMGN', 'GILD', 'BIIB', 'REGN', 'VRTX', 'MRNA',
-            'ILMN', 'ISRG', 'DXCM', 'ZTS', 'EW', 'BSX', 'MDT', 'SYK',
+            # 美國醫療保健
+            'JNJ', 'PFE', 'UNH', 'ABBV', 'MRK', 'TMO', 'ABT', 'LLY', 'DHR',
+            'BMY', 'AMGN', 'GILD', 'BIIB', 'REGN', 'VRTX', 'MRNA', 'ILMN',
+            'ISRG', 'DXCM', 'ZTS', 'EW', 'BSX', 'MDT', 'SYK', 'CVS', 'CI',
             
-            # 消費股
-            'KO', 'PEP', 'WMT', 'PG', 'HD', 'MCD', 'SBUX', 'NKE',
-            'DIS', 'CMCSA', 'VZ', 'T', 'CHTR', 'NFLX', 'ROKU', 'SPOT',
-            'AMZN', 'EBAY', 'ETSY', 'SHOP', 'SQ', 'PYPL', 'V', 'MA',
+            # 美國消費品及零售
+            'KO', 'PEP', 'WMT', 'PG', 'HD', 'MCD', 'SBUX', 'NKE', 'DIS',
+            'CMCSA', 'VZ', 'T', 'CHTR', 'ROKU', 'EBAY', 'ETSY', 'SHOP',
+            'TGT', 'LOW', 'COST', 'TJX', 'LULU', 'ULTA', 'RH', 'DECK',
             
-            # 工業股
-            'BA', 'CAT', 'GE', 'HON', 'MMM', 'RTX', 'UPS', 'FDX',
-            'LMT', 'NOC', 'GD', 'TDG', 'ETN', 'EMR', 'ITW', 'PH',
+            # 美國工業及製造業
+            'BA', 'CAT', 'GE', 'HON', 'MMM', 'RTX', 'UPS', 'FDX', 'LMT',
+            'NOC', 'GD', 'TDG', 'ETN', 'EMR', 'ITW', 'PH', 'DE', 'CMI',
             
-            # 能源股
-            'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'OXY', 'KMI', 'WMB',
-            'PSX', 'VLO', 'MPC', 'HES', 'DVN', 'PXD', 'MRO', 'APA',
+            # 美國能源
+            'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'OXY', 'KMI', 'WMB', 'PSX',
+            'VLO', 'MPC', 'HES', 'DVN', 'PXD', 'MRO', 'APA', 'HAL', 'BKR',
             
-            # 公用事業股
-            'NEE', 'DUK', 'SO', 'D', 'EXC', 'AEP', 'XEL', 'SRE',
-            'ES', 'PEG', 'WEC', 'AWK', 'ED', 'ETR', 'FE', 'AEE',
+            # 美國公用事業
+            'NEE', 'DUK', 'SO', 'D', 'EXC', 'AEP', 'XEL', 'SRE', 'ES',
+            'PEG', 'WEC', 'AWK', 'ED', 'ETR', 'FE', 'AEE', 'PPL', 'CMS',
             
-            # 房地產股
+            # 美國房地產 (REITs)
             'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'EXR', 'AVB', 'EQR',
             'MAA', 'UDR', 'CPT', 'ESS', 'BXP', 'SLG', 'KIM', 'REG',
             
-            # 材料股
-            'LIN', 'APD', 'SHW', 'DD', 'DOW', 'ECL', 'PPG', 'NEM',
-            'FCX', 'SCCO', 'NUE', 'X', 'CLF', 'STLD', 'CMC', 'RS',
+            # 美國材料及化學
+            'LIN', 'APD', 'SHW', 'DD', 'DOW', 'ECL', 'PPG', 'NEM', 'FCX',
+            'SCCO', 'NUE', 'X', 'CLF', 'STLD', 'CMC', 'RS', 'CF', 'MOS',
             
-            # 通信股
-            'VZ', 'T', 'TMUS', 'CHTR', 'CMCSA', 'DIS', 'NFLX', 'ROKU',
-            'SPOT', 'P', 'SIRI', 'LBRDK', 'LBRDA', 'FWONK', 'FWONA', 'LSXMK',
+            # 中國概念股 (ADR)
+            'BABA', 'JD', 'PDD', 'BIDU', 'NTES', 'BILI', 'TME', 'VIPS',
+            'YMM', 'TAL', 'EDU', 'GOTU', 'IQ', 'DIDI', 'XPEV', 'NIO', 'LI',
             
-            # 中概股
-            'BABA', 'JD', 'PDD', 'BIDU', 'NTES', 'WB', 'BILI', 'TME',
-            'VIPS', 'YMM', 'TAL', 'EDU', 'GOTU', 'COE', 'IQ', 'WB',
+            # 歐洲大型企業 (ADR)
+            'ASML', 'SAP', 'NVO', 'NESN', 'RHHBY', 'UL', 'SNY', 'GSK',
+            'AZN', 'BP', 'RDS.A', 'RDS.B', 'VOD', 'BT', 'ING', 'DB',
+            'CS', 'UBS', 'BCS', 'HSBC', 'RY', 'TD', 'BMO', 'BNS', 'CM',
             
-            # 新興成長股
-            'ROKU', 'ZM', 'DOCU', 'SNOW', 'PLTR', 'CRWD', 'ZS', 'OKTA',
-            'NET', 'DDOG', 'MDB', 'TWLO', 'WDAY', 'NOW', 'TEAM', 'SPLK',
-            'ESTC', 'DBX', 'BOX', 'WORK', 'SLACK', 'PINS', 'SNAP', 'TWTR',
+            # 日本企業 (ADR)
+            'TM', 'SONY', 'NTT', 'MUFG', 'SMFG', 'MFG', 'HMC', 'FUJIY',
+            'KYOCY', 'NTDOY', 'SFM', 'HTHIY', 'TKOMY', 'CANNY',
             
-            # 生物科技股
-            'GILD', 'BIIB', 'REGN', 'VRTX', 'MRNA', 'ILMN', 'ISRG', 'DXCM',
-            'ZTS', 'EW', 'BSX', 'MDT', 'SYK', 'ABBV', 'LLY', 'JNJ',
+            # 韓國企業
+            'TSM', 'LPL', 'KB', 'SHI', 'PKX', 'WF',
             
-            # 半導體股
-            'NVDA', 'AMD', 'INTC', 'QCOM', 'TXN', 'AVGO', 'MU', 'AMAT',
+            # 印度企業 (ADR)
+            'INFY', 'WIT', 'HDB', 'IBN', 'INDA', 'MINDX', 'TTM', 'RDY',
+            
+            # 巴西企業 (ADR)
+            'VALE', 'ITUB', 'BBD', 'PBR', 'ABEV', 'SBS', 'UGP',
+            
+            # 澳洲及加拿大企業
+            'BHP', 'RIO', 'SHOP', 'CNQ', 'SU', 'ENB', 'TRP', 'PPL',
+            
+            # 新興成長股及特殊情況
+            'RIVN', 'LCID', 'F', 'GM', 'SPCE', 'MAXR', 'IRDM', 'VSAT',
+            'GILT', 'KTOS', 'AJRD', 'HWM', 'LHX', 'LDOS', 'TXT',
+            
+            # 半導體及技術硬體
             'LRCX', 'KLAC', 'MCHP', 'ADI', 'MRVL', 'SWKS', 'QRVO', 'SLAB',
+            'ON', 'MPWR', 'MXIM', 'XLNX', 'ALTR', 'LSCC', 'CRUS', 'RMBS',
             
-            # 電動車股
-            'TSLA', 'NIO', 'XPEV', 'LI', 'RIVN', 'LCID', 'F', 'GM',
-            'FORD', 'RIDE', 'WKHS', 'GOEV', 'HYLN', 'NKLA', 'RIDE', 'ARVL',
+            # 生物科技及醫療設備
+            'TDOC', 'VEEV', 'IQVIA', 'A', 'HOLX', 'ALGN', 'IDXX', 'MTD',
+            'TECH', 'BDX', 'BAX', 'ZBH', 'STE', 'RMD', 'PODD', 'NVTA',
             
-            # 太空股
-            'SPCE', 'MAXR', 'IRDM', 'VSAT', 'GILT', 'KTOS', 'AJRD', 'LMT',
-            'NOC', 'RTX', 'BA', 'HWM', 'TDG', 'LHX', 'LDOS', 'TXT',
+            # 雲端及軟體服務
+            'AMZN', 'MSFT', 'GOOGL', 'CRM', 'ADBE', 'INTU', 'CTXS',
+            'VMW', 'PANW', 'FTNT', 'CHKP', 'CYBR', 'FEYE', 'VRNS',
             
-            # 加密貨幣相關
-            'COIN', 'MSTR', 'SQ', 'PYPL', 'V', 'MA', 'JPM', 'BAC',
-            'WFC', 'GS', 'MS', 'C', 'AXP', 'BLK', 'ICE', 'CME'
+            # 電子商務及數位媒體
+            'AMZN', 'EBAY', 'ETSY', 'W', 'OSTK', 'GRPN', 'YELP', 'TRIP',
+            'EXPE', 'BKNG', 'MAR', 'HLT', 'H', 'WH', 'RCL', 'CCL',
+            
+            # 食品及飲料
+            'KO', 'PEP', 'MDLZ', 'GIS', 'K', 'CPB', 'CAG', 'SJM',
+            'HSY', 'MKC', 'CLX', 'CHD', 'CL', 'KMB', 'PG', 'UL',
+            
+            # 運輸及物流
+            'UPS', 'FDX', 'XPO', 'CHRW', 'EXPD', 'JBHT', 'KNX', 'ODFL',
+            'SAIA', 'ARCB', 'WERN', 'MATX', 'HUBG', 'LSTR', 'GXO',
+            
+            # 零售及消費服務
+            'WMT', 'TGT', 'COST', 'HD', 'LOW', 'TJX', 'ROST', 'DG',
+            'DLTR', 'BBY', 'GPS', 'M', 'JWN', 'KSS', 'DSW', 'FL',
+            
+            # 金融科技 (FinTech)
+            'SQ', 'PYPL', 'AFRM', 'SOFI', 'LC', 'UPST', 'HOOD', 'COIN',
+            'NU', 'PAGS', 'STNE', 'MELI', 'SE', 'GRAB', 'DIDI',
+            
+            # 旅遊及休閒
+            'DIS', 'NFLX', 'CMCSA', 'T', 'VZ', 'CHTR', 'DISH', 'SIRI',
+            'LYV', 'MSG', 'MSGS', 'VIAC', 'DISCA', 'DISCK', 'FOX', 'FOXA'
         ]
     
     def setup_database(self):
@@ -154,42 +187,94 @@ class StockScanner:
             # 檢測增強 VCP 形態
             enhanced_vcp_detected, enhanced_vcp_status, enhanced_vcp_details = self.analyzer.detect_enhanced_vcp(stock_data)
             
+            # 檢測KC形態
+            kc_data = self.analyzer.calculate_keltner_channels(stock_data)
+            kc_signal, kc_score, kc_strategy = self.analyzer.analyze_keltner_signals(stock_data, kc_data)
+            
+            # 計算綜合信心度
+            confidence_factors = {
+                'vcp_basic': 20 if basic_vcp_detected else 0,
+                'vcp_enhanced': enhanced_vcp_details.get('score', 0) * 0.3 if enhanced_vcp_detected else 0,
+                'kc_signal': kc_score * 0.25 if kc_score > 60 else 0,
+                'kc_strategy_bonus': 15 if kc_strategy in ['strong_bullish', 'consolidation_bullish'] else 0
+            }
+            
             # 如果任一VCP檢測成功，就加入推薦
             if basic_vcp_detected or enhanced_vcp_detected:
-                # 動態計算信心度
+                # 新的信心度計算
+                base_confidence = sum(confidence_factors.values())
+                
                 if enhanced_vcp_detected:
-                    confidence_score = enhanced_vcp_details.get('score', 60)
                     status = enhanced_vcp_status
                     if basic_vcp_detected:
                         status = f"{basic_vcp_status} + {enhanced_vcp_status}"
-                        confidence_score = max(confidence_score, 75)
+                        base_confidence += 10  # 雙重VCP獎勵
                 else:
-                    confidence_score = 70  # 基本VCP信心度
                     status = basic_vcp_status
+                
+                # KC策略增強
+                if kc_strategy == 'strong_bullish':
+                    status += " + KC強勢突破"
+                    base_confidence += 10
+                elif kc_strategy == 'consolidation_bullish':
+                    status += " + KC整理待突破"
+                    base_confidence += 5
+                
+                final_confidence = min(95, max(50, base_confidence))
                 
                 patterns_found.append({
                     "type": "VCP",
-                    "confidence": confidence_score,
+                    "confidence": final_confidence,
                     "status": status,
-                    "details": enhanced_vcp_details if enhanced_vcp_detected else {}
+                    "details": dict({
+                        'kc_strategy': kc_strategy,
+                        'kc_score': kc_score,
+                        'confidence_breakdown': confidence_factors
+                    }, **(enhanced_vcp_details if enhanced_vcp_detected else {}))
                 })
             
             # 檢測 Cup & Handle 形態
             cup_handle_detected, cup_handle_status = self.analyzer.detect_cup_handle_pattern(stock_data)
             if cup_handle_detected:
-                # 根據形態狀態計算信心度
+                # 新的Cup & Handle信心度計算
+                base_cup_confidence = 60
                 if "突破在即" in cup_handle_status:
-                    cup_confidence = 85
+                    base_cup_confidence = 75
                 elif "形成" in cup_handle_status:
-                    cup_confidence = 75
-                else:
-                    cup_confidence = 65
+                    base_cup_confidence = 65
+                
+                # KC增強
+                if kc_strategy == 'strong_bullish':
+                    base_cup_confidence += 15
+                    cup_handle_status += " + KC強勢突破"
+                elif kc_strategy == 'consolidation_bullish':
+                    base_cup_confidence += 10
+                    cup_handle_status += " + KC整理待突破"
+                
+                final_cup_confidence = min(90, base_cup_confidence)
                     
                 patterns_found.append({
                     "type": "Cup_Handle",
-                    "confidence": cup_confidence,
+                    "confidence": final_cup_confidence,
                     "status": cup_handle_status,
-                    "details": {}
+                    "details": {
+                        'kc_strategy': kc_strategy,
+                        'kc_score': kc_score
+                    }
+                })
+            
+            # 純KC形態（無VCP或Cup&Handle時）
+            elif kc_strategy in ['strong_bullish', 'consolidation_bullish', 'oversold_opportunity']:
+                kc_confidence = kc_score * 0.8  # KC單獨信心度較低
+                
+                patterns_found.append({
+                    "type": "KC",
+                    "confidence": min(80, max(50, kc_confidence)),
+                    "status": kc_signal,
+                    "details": {
+                        'kc_strategy': kc_strategy,
+                        'kc_score': kc_score
+                    }
                 })
             
             # 計算風險評分和止損點
@@ -276,10 +361,13 @@ class StockScanner:
                 scan_result = self.scan_single_stock(ticker)
                 
                 if scan_result.get("success") and scan_result.get("patterns"):
-                    # 儲存到資料庫
-                    self.save_pattern_stock(scan_result)
-                    results["pattern_stocks"].append(scan_result)
-                    results["patterns_found"] += len(scan_result["patterns"])
+                    # 儲存到資料庫 (只儲存符合範選條件的)
+                    if self.meets_swing_trading_criteria(scan_result):
+                        self.save_pattern_stock(scan_result)
+                        results["pattern_stocks"].append(scan_result)
+                        results["patterns_found"] += len(scan_result["patterns"])
+                    else:
+                        logger.debug(f"跳過 {scan_result['ticker']}: 不符合 Swing Trading 範選條件")
                 
                 # 進度顯示
                 if (i + 1) % 10 == 0:
@@ -297,11 +385,104 @@ class StockScanner:
         # 儲存掃描歷史
         self.save_scan_history(results)
         
-        logger.info(f"掃描完成: 找到 {results['patterns_found']} 個形態")
+        # 更新Google Sheets
+        self.update_google_sheets(results)
+        
+        qualified_stocks = len(results["pattern_stocks"])
+        total_patterns = results["patterns_found"]
+        
+        logger.info(f"✅ 掃描完成: 符合範選 {qualified_stocks} 支股票，{total_patterns} 個形態")
+        logger.info(f"🎯 Swing Trading 範選率: {qualified_stocks/len(stock_list)*100:.1f}%")
+        
         return results
     
+    def update_google_sheets(self, results: Dict):
+        """更新Google Sheets"""
+        try:
+            from google_sheets_integration import update_sheets_with_scan_results
+            success = update_sheets_with_scan_results(results)
+            if success:
+                logger.info("✅ Google Sheets更新成功")
+            else:
+                logger.info("📊 Google Sheets整合未啟用或更新失敗")
+        except ImportError:
+            logger.info("📊 Google Sheets整合模組未安裝")
+        except Exception as e:
+            logger.warning(f"⚠️ Google Sheets更新錯誤: {e}")
+    
+    def meets_swing_trading_criteria(self, scan_result: Dict) -> bool:
+        """檢查是否符合 Swing Trading 範選條件"""
+        try:
+            ticker = scan_result["ticker"]
+            current_price = scan_result["current_price"]
+            patterns = scan_result["patterns"]
+            risk_assessment = scan_result["risk_assessment"]
+            
+            # 範選條件 1: 價格範圍 ($5-$500)
+            if current_price < 5 or current_price > 500:
+                return False
+            
+            # 範選條件 2: 最高信心度闾值 (70%+)
+            max_confidence = max([p["confidence"] for p in patterns], default=0)
+            if max_confidence < 70:
+                return False
+            
+            # 範選條件 3: 風險控制 (最大損失 ≤10%)
+            if risk_assessment["max_loss_percentage"] > 10:
+                return False
+            
+            # 範選條件 4: 波動率範圍 (15%-60%)
+            volatility = risk_assessment["volatility"]
+            if volatility < 0.15 or volatility > 0.60:
+                return False
+            
+            # 範選條件 5: 形態品質範選
+            has_quality_pattern = False
+            for pattern in patterns:
+                pattern_type = pattern["type"]
+                confidence = pattern["confidence"]
+                details = pattern.get("details", {})
+                
+                # VCP 形態: 高信心度 + KC 支持
+                if pattern_type == "VCP" and confidence >= 75:
+                    kc_strategy = details.get("kc_strategy", "")
+                    if kc_strategy in ["strong_bullish", "consolidation_bullish"]:
+                        has_quality_pattern = True
+                        break
+                
+                # Cup & Handle: 中高信心度
+                elif pattern_type == "Cup_Handle" and confidence >= 70:
+                    has_quality_pattern = True
+                    break
+                
+                # KC 獨立形態: 高信心度 + 強勢信號
+                elif pattern_type == "KC" and confidence >= 75:
+                    kc_strategy = details.get("kc_strategy", "")
+                    if kc_strategy == "strong_bullish":
+                        has_quality_pattern = True
+                        break
+            
+            if not has_quality_pattern:
+                return False
+            
+            # 範選條件 6: 排除問題股票
+            problem_tickers = ["SQ", "NKLA", "RIDE", "WKHS"]  # 已知問題股票
+            if ticker in problem_tickers:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"範選條件檢查錯誤 {ticker}: {e}")
+            return False
+    
     def save_pattern_stock(self, scan_result: Dict):
-        """儲存形態股到資料庫"""
+        """儲存符合範選條件的形態股到資料庫"""
+        # 先檢查是否符合 Swing Trading 範選條件
+        if not self.meets_swing_trading_criteria(scan_result):
+            logger.debug(f"股票 {scan_result['ticker']} 不符合 Swing Trading 範選條件，跳過")
+            return
+        
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -327,6 +508,8 @@ class StockScanner:
         
         conn.commit()
         conn.close()
+        
+        logger.info(f"✅ 符合範選: {ticker} - 信心度: {max([p['confidence'] for p in scan_result['patterns']]):.1f}%")
     
     def save_scan_history(self, results: Dict):
         """儲存掃描歷史"""
@@ -347,7 +530,7 @@ class StockScanner:
         conn.close()
     
     def get_recommended_stocks(self, limit: int = 10) -> List[Dict]:
-        """獲取推薦股票，合併同一股票的多個形態"""
+        """獲取推薦股票，合併同一股票的多個形態，避免重複"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -393,29 +576,86 @@ class StockScanner:
                 "detection_date": data["detection_date"]
             })
         
-        # 按信心度排序並限制數量
+        # 按信心度排序並去重
         results.sort(key=lambda x: x["confidence_score"], reverse=True)
         
+        # 確保不重複 - 只保留最高信心度的記錄
+        seen_tickers = set()
+        unique_results = []
+        for result in results:
+            if result["ticker"] not in seen_tickers:
+                unique_results.append(result)
+                seen_tickers.add(result["ticker"])
+        
         conn.close()
-        return results[:limit]
+        return unique_results[:limit]
     
-    def get_dynamic_stock_list(self, max_stocks: int = 50) -> List[str]:
-        """動態選擇股票列表"""
+    def get_dynamic_stock_list(self, max_stocks: int = 150) -> List[str]:
+        """動態選擇股票列表 - 全球500大企業版"""
         import random
         
-        # 確保熱門股票優先 (前20支)
-        priority_stocks = self.popular_stocks[:20]
+        total_available = len(self.popular_stocks)
+        logger.info(f"🌍 可用股票池: {total_available} 支全球企業")
         
-        # 從剩餘股票中隨機選擇
-        remaining_stocks = self.popular_stocks[20:]
-        random_stocks = random.sample(remaining_stocks, min(max_stocks - 20, len(remaining_stocks)))
+        # 分層選股策略 - 確保使用全部500支股票
+        if max_stocks <= 50:
+            # 小量掃描: 優先熱門股票
+            priority_stocks = self.popular_stocks[:30]
+            remaining_stocks = self.popular_stocks[30:150]
+            random_stocks = random.sample(remaining_stocks, min(max_stocks - 30, len(remaining_stocks)))
+            selected_stocks = priority_stocks + random_stocks
         
-        # 合併並打亂順序
-        selected_stocks = priority_stocks + random_stocks
+        elif max_stocks <= 100:
+            # 中量掃描: 平衡選股
+            priority_stocks = self.popular_stocks[:50]  # 前50支熱門
+            remaining_stocks = self.popular_stocks[50:300]
+            random_stocks = random.sample(remaining_stocks, min(max_stocks - 50, len(remaining_stocks)))
+            selected_stocks = priority_stocks + random_stocks
+        
+        else:
+            # 大量掃描: 全面覆蓋全球500大企業
+            priority_stocks = self.popular_stocks[:80]  # 前80支熱門
+            
+            # 分類選股: 確保各地區各行業都有覆蓋
+            us_tech = self.popular_stocks[80:150]        # 美國科技股
+            us_finance = self.popular_stocks[150:200]    # 美國金融股
+            us_healthcare = self.popular_stocks[200:250] # 美國醫療股
+            international = self.popular_stocks[250:400] # 國際企業
+            emerging = self.popular_stocks[400:]         # 新興市場
+            
+            # 按比例選擇，確保全球覆蓋
+            remaining_slots = max_stocks - 80
+            us_tech_count = min(20, len(us_tech))
+            us_finance_count = min(15, len(us_finance))
+            us_healthcare_count = min(15, len(us_healthcare))
+            international_count = min(20, len(international))
+            emerging_count = min(remaining_slots - us_tech_count - us_finance_count - us_healthcare_count - international_count, len(emerging))
+            
+            selected_stocks = priority_stocks + \
+                            random.sample(us_tech, us_tech_count) + \
+                            random.sample(us_finance, us_finance_count) + \
+                            random.sample(us_healthcare, us_healthcare_count) + \
+                            random.sample(international, international_count) + \
+                            random.sample(emerging, max(0, emerging_count))
+        
+        # 打亂順序以避免偏差
         random.shuffle(selected_stocks)
         
-        logger.info(f"動態選擇了 {len(selected_stocks)} 支股票進行掃描")
-        return selected_stocks[:max_stocks]
+        # 過濾已掃描的股票
+        unscanned_stocks = [s for s in selected_stocks if s not in self.scanned_today]
+        
+        # 如果未掃描股票不足，從全部500支中選擇
+        if len(unscanned_stocks) < max_stocks * 0.8:
+            all_unscanned = [s for s in self.popular_stocks if s not in self.scanned_today]
+            if len(all_unscanned) >= max_stocks:
+                unscanned_stocks = random.sample(all_unscanned, max_stocks)
+            else:
+                unscanned_stocks = all_unscanned
+        
+        final_list = unscanned_stocks[:max_stocks]
+        logger.info(f"🎯 選擇 {len(final_list)} 支未掃描股票 (今日已掃描: {len(self.scanned_today)}/總池: {total_available})")
+        
+        return final_list
     
     def cleanup_old_patterns(self, days: int = 7):
         """清理舊的形態記錄"""

@@ -31,6 +31,12 @@
 - **形態報告**: 清晰展示識別結果
 - **響應式設計**: Bootstrap 5 現代化界面
 
+### 📊 Google Sheets 整合
+- **自動更新**: 掃描完成後自動更新指定的 Google Sheets
+- **詳細數據**: 包含 20 個重要欄位的完整分析數據
+- **雙工作表**: Scanner Results (詳細數據) + Scan Summary (摘要統計)
+- **實時同步**: 每次掃描後即時更新選股清單
+
 ## 🛠️ 技術架構
 
 ### 後端技術
@@ -53,6 +59,12 @@
 - **情緒分析**: 市場情緒評估
 - **風險管理**: AI 驅動的止損建議
 
+### Google Sheets 整合
+- **gspread**: Google Sheets API 客戶端
+- **google-auth**: 服務帳戶認證
+- **自動格式化**: 顏色編碼和數字格式
+- **錯誤處理**: 完善的異常處理機制
+
 ## 🚀 快速開始
 
 ### 1. 環境設置
@@ -69,6 +81,9 @@ source venv/bin/activate  # macOS/Linux
 
 # 安裝依賴
 pip install -r requirements.txt
+
+# Google Sheets 整合 (可選)
+pip install gspread google-auth google-auth-oauthlib google-auth-httplib2
 ```
 
 ### 2. API 配置
@@ -89,12 +104,25 @@ FINNHUB_KEY=your_finnhub_key_here
 # Tiingo API (推薦用於高質量新聞)
 TIINGO_API_KEY=your_tiingo_api_key_here
 
+# Google Sheets 整合 (可選)
+# 需要設置 service_account.json 文件
+# 詳見 GOOGLE_SHEETS_SETUP.md
+
 # 系統配置
 FLASK_DEBUG=True
 FLASK_PORT=5001
 ```
 
-### 3. 啟動應用
+### 3. Google Sheets 整合設置 (可選)
+
+```bash
+# 測試 Google Sheets 整合
+python test_google_sheets.py
+
+# 如果測試失敗，請按照 GOOGLE_SHEETS_SETUP.md 指南設置
+```
+
+### 4. 啟動應用
 
 ```bash
 # 啟動主應用
@@ -104,7 +132,7 @@ python app.py
 # 打開瀏覽器訪問: http://localhost:5001
 ```
 
-### 4. 啟動定時任務 (可選)
+### 5. 啟動定時任務 (可選)
 
 ```bash
 # 在另一個終端中啟動定時掃描任務
@@ -132,6 +160,7 @@ python scheduler.py
 - **多時間軸**: 日線/週線/月線分析
 - **新聞分析**: 實時新聞和情緒分析
 - **AI 洞察**: 基於 AI 的投資建議
+- **Google Sheets**: 點擊「查看選股清單」查看自動更新的分析數據
 
 ## 🔧 API 端點
 
@@ -142,6 +171,7 @@ python scheduler.py
 - `GET /api/stop-loss/<ticker>` - 獲取止損建議
 - `GET /api/news/<ticker>` - 獲取新聞分析
 - `POST /api/trigger-scan` - 手動觸發股票掃描 (管理員用)
+- Google Sheets 自動更新 - 每次掃描後自動同步數據
 
 ### 使用示例
 ```bash
@@ -233,6 +263,33 @@ AI 最終評分 = (技術分析分數 × 0.50) + (新聞分析分數 × 0.20 × 
               (市場情緒分數 × 0.15 × 置信度) + (風險評估分數 × 0.15 × 置信度)
 ```
 
+## 🎯 Google Sheets 選股清單
+
+### 📊 自動更新欄位
+- **更新時間**: 掃描執行時間
+- **股票代號**: 股票符號  
+- **當前價格**: 實時股價
+- **形態類型**: VCP, Cup & Handle, KC
+- **信心度**: 0-95% 信心評分
+- **突破位**: 預期突破價格
+- **支撐位**: 關鍵支撐位
+- **建議止損**: 風險控制點
+- **風險等級**: 低/中/高風險
+- **波動率**: 年化波動率
+- **RS評級**: 相對強度評級
+- **RSI**: 相對強弱指標
+- **MACD**: 趨勢指標
+- **KC策略**: 肯特納通道策略
+- **KC評分**: KC指標評分
+- **形態狀態**: 形態詳細描述
+- **最大損失%**: 風險百分比
+- **交易量確認**: 成交量驗證
+- **市場趨勢**: 大盤趨勢狀態
+- **備註**: 額外信息
+
+### 🔗 直接訪問
+[查看選股清單](https://docs.google.com/spreadsheets/d/1UsoATZK0FS7909hRdf8g8oPQ4_sHCRFLoX3GnkRzEJU/edit?gid=0#gid=0)
+
 ## 🎯 核心算法
 
 ### RS Rating 計算
@@ -261,6 +318,13 @@ AI 最終評分 = (技術分析分數 × 0.50) + (新聞分析分數 × 0.20 × 
 - **NewsAPI**: https://newsapi.org/ (1000 請求/天)
 - **Alpha Vantage**: https://www.alphavantage.co/ (5 請求/分鐘)
 - **Finnhub**: https://finnhub.io/ (60 請求/分鐘)
+
+### Google Sheets API (可選)
+1. 前往 [Google Cloud Console](https://console.cloud.google.com/)
+2. 創建項目並啟用 Google Sheets API
+3. 創建服務帳戶並下載 JSON 憑證
+4. 將憑證文件命名為 `service_account.json`
+5. 詳細設置請參考 `GOOGLE_SHEETS_SETUP.md`
 
 ## 🛠️ 故障排除
 
@@ -300,6 +364,18 @@ pip install -r requirements.txt
 # 刪除舊數據庫重新創建
 rm stock_analysis.db
 python -c "from stock_scanner import StockScanner; StockScanner()"
+```
+
+#### 5. Google Sheets 整合問題
+```bash
+# 測試 Google Sheets 整合
+python test_google_sheets.py
+
+# 檢查憑證文件
+ls -la service_account.json
+
+# 查看詳細設置指南
+cat GOOGLE_SHEETS_SETUP.md
 ```
 
 ## 📊 系統特色

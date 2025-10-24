@@ -149,6 +149,146 @@ class GrowthSignalAnalyzer:
         except Exception as e:
             logging.warning(f"BB 計算錯誤: {e}", exc_info=False)
             return 50 * (WEIGHTS["BB_SCORE"] / 100)
+    
+    def calculate_keltner_channels(self, data, period=20, multiplier=2):
+        """計算肯特納通道 (Keltner Channels) 指標"""
+        try:
+            # 計算EMA作為中線
+            ema = data['Close'].ewm(span=period).mean()
+            
+            # 計算ATR (Average True Range)
+            high_low = data['High'] - data['Low']
+            high_close = np.abs(data['High'] - data['Close'].shift())
+            low_close = np.abs(data['Low'] - data['Close'].shift())
+            
+            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            atr = true_range.rolling(window=period).mean()
+            
+            # 計算上下軌
+            upper_channel = ema + (multiplier * atr)
+            lower_channel = ema - (multiplier * atr)
+            
+            return {
+                'basis': ema,
+                'upper': upper_channel,
+                'lower': lower_channel,
+                'atr': atr
+            }
+        except Exception as e:
+            logging.warning(f"KC 計算錯誤: {e}")
+            return None
+    
+    def analyze_keltner_signals(self, data, kc_data):
+        """分析肯特納通道信號"""
+        try:
+            if kc_data is None:
+                return "無法計算", 50, "neutral"
+            
+            current_price = data['Close'].iloc[-1]
+            upper = kc_data['upper'].iloc[-1]
+            lower = kc_data['lower'].iloc[-1]
+            basis = kc_data['basis'].iloc[-1]
+            
+            # 檢查通道寬度 (波動性)
+            channel_width = (upper - lower) / basis
+            is_contracting = channel_width < 0.04  # 通道收窄
+            is_expanding = channel_width > 0.12    # 通道擴張
+            
+            # 判斷趨勢和信號
+            if current_price > upper:
+                signal = "突破上軌 - 強勢上漲"
+                strategy = "strong_bullish"
+                score = 85
+                if is_contracting:
+                    signal += " (低波動突破)"
+                    score += 10
+            elif current_price < lower:
+                signal = "跌破下軌 - 超賣反彈機會"
+                strategy = "oversold_opportunity"
+                score = 25
+                if is_contracting:
+                    signal += " (低波動超賣)"
+                    score += 15  # 超賣反彈機會更大
+            elif current_price > basis:
+                if is_contracting:
+                    signal = "中軌上方 - 整理待突破"
+                    strategy = "consolidation_bullish"
+                    score = 75
+                else:
+                    signal = "中軌上方 - 多頭趨勢"
+                    strategy = "bullish_trend"
+                    score = 70
+            else:
+                if is_contracting:
+                    signal = "中軌下方 - 整理觀望"
+                    strategy = "consolidation_bearish"
+                    score = 45
+                else:
+                    signal = "中軌下方 - 空頭趨勢"
+                    strategy = "bearish_trend"
+                    score = 40
+            
+            # 高波動性懲罰
+            if is_expanding:
+                signal += " (高波動性)"
+                score -= 5
+            
+            return signal, min(100, max(0, score)), strategy
+        except Exception as e:
+            logging.warning(f"KC 信號分析錯誤: {e}")
+            return "分析失敗", 50, "neutral"
+    
+    def get_kc_strategy_recommendation(self, kc_strategy, vcp_detected, rs_rating, final_score):
+        """根據KC策略給出建議"""
+        recommendations = {
+            "strong_bullish": {
+                "action": "📈 強勢買入信號",
+                "description": "KC上軌突破 + 強勢動能",
+                "color": "success"
+            },
+            "consolidation_bullish": {
+                "action": "⏳ 整理待突破",
+                "description": "KC通道收窄 + 價格在中軌上方",
+                "color": "warning"
+            },
+            "bullish_trend": {
+                "action": "📈 多頭趨勢持續",
+                "description": "價格在KC中軌上方運行",
+                "color": "info"
+            },
+            "oversold_opportunity": {
+                "action": "💰 超賣反彈機會",
+                "description": "KC下軌超賣 + 潛在反彈",
+                "color": "primary"
+            },
+            "consolidation_bearish": {
+                "action": "⏳ 觀望為主",
+                "description": "價格在KC中軌下方整理",
+                "color": "secondary"
+            },
+            "bearish_trend": {
+                "action": "📉 空頭趨勢警告",
+                "description": "價格在KC中軌下方運行",
+                "color": "danger"
+            },
+            "neutral": {
+                "action": "⏳ 中性觀望",
+                "description": "KC指標無明確信號",
+                "color": "secondary"
+            }
+        }
+        
+        base_rec = recommendations.get(kc_strategy, recommendations["neutral"])
+        
+        # 結合VCP和RS Rating增強建議
+        if kc_strategy == "strong_bullish" and vcp_detected and rs_rating > 80:
+            base_rec["action"] = "🚀 最佳買入機會"
+            base_rec["description"] += " + VCP形態 + 高RS評級"
+        elif kc_strategy == "consolidation_bullish" and vcp_detected:
+            base_rec["action"] = "🎯 突破在即"
+            base_rec["description"] += " + VCP形態確認"
+        
+        return base_rec
 
 
     def check_volume_confirmation(self, data, period=50, volume_multiplier=1.5):
@@ -262,6 +402,10 @@ class GrowthSignalAnalyzer:
         macd_value, signal_value, macd_score = self.calculate_macd_score(data)
         bb_score = self.calculate_bb_score(data)
         
+        # 計算肯特納通道指標
+        kc_data = self.calculate_keltner_channels(data)
+        kc_signal, kc_score, kc_strategy = self.analyze_keltner_signals(data, kc_data)
+        
         volume_ok_score, volume_status = self.check_volume_confirmation(data)
         trend_ok, trend_score, trend_status = self.check_market_trend(data_sp500)
         
@@ -320,20 +464,49 @@ class GrowthSignalAnalyzer:
         # 計算突破位
         breakout_price = self.calculate_breakout_price(data, final_vcp_detected, cup_handle_detected)
         
+        # KC策略建議
+        kc_recommendation = self.get_kc_strategy_recommendation(
+            kc_strategy, 
+            final_vcp_detected, 
+            rs_score/(WEIGHTS["RS_RATING"]/100) if rs_score else 50, 
+            final_score
+        )
+        
         # 準備圖表數據
         chart_data = self.prepare_chart_data(data)
         
+        # 計算缺失的數值
+        current_price = data['Close'].iloc[-1]
+        
+        # 計算支撐位 (最近20日最低點)
+        support_level = data['Low'].tail(20).min()
+        
+        # 計算年化波動率
+        returns = data['Close'].pct_change().dropna()
+        volatility = returns.std() * (252 ** 0.5) if len(returns) > 0 else 0.25
+        
+        # 如果沒有止損價，使用支撐位下方3%
+        if stop_loss_price == "N/A" or stop_loss_price is None:
+            stop_loss_price = support_level * 0.97
+        
+        # 檢查成交量狀態
+        volume_ok = volume_ok_score > 0
+        
         return {
             "ticker": ticker.upper(),
+            "current_price": round(current_price, 2),
             "final_score": round(final_score, 1),
             "advice": advice,
             "advice_color": advice_color,
             "scores_breakdown": {k: round(v if v is not None else 0, 2) for k, v in scores_dict.items()},
-            "rs_rating": round(rs_score / (WEIGHTS["RS_RATING"] / 100), 1) if rs_score is not None else 50, # 反推原始 RS 1-99 分數
+            "rs_rating": round(rs_score / (WEIGHTS["RS_RATING"] / 100), 1) if rs_score is not None else 50,
             "rsi": round(rsi_value, 1) if rsi_value is not None else 50,
             "macd": round(macd_value, 2) if macd_value is not None else 0,
             "signal": round(signal_value, 2) if signal_value is not None else 0,
-            # 必須強制轉換為 Python 標準 bool 型別，解決 JSON 序列化錯誤
+            "kc_signal": kc_signal,
+            "kc_score": round(kc_score, 1) if kc_score is not None else 50,
+            "kc_strategy": kc_strategy,
+            "kc_recommendation": kc_recommendation,
             "vcp_detected": bool(final_vcp_detected),
             "vcp_status": vcp_status if vcp_detected else enhanced_vcp_status if enhanced_vcp_detected else "未發現",
             "pattern_summary": pattern_summary,
@@ -342,7 +515,10 @@ class GrowthSignalAnalyzer:
             "cup_handle_detected": bool(cup_handle_detected),
             "cup_handle_status": cup_handle_status,
             "market_trend": trend_status,
-            "recommended_stop_loss": round(stop_loss_price, 2) if stop_loss_price is not None and stop_loss_price != "N/A" else "N/A",
+            "support_level": round(support_level, 2),
+            "recommended_stop_loss": round(stop_loss_price, 2) if isinstance(stop_loss_price, (int, float)) else round(support_level * 0.97, 2),
+            "volatility": round(volatility, 3),
+            "volume_ok": volume_ok,
             "chart_data": chart_data,
             "breakout_price": breakout_price,
             "success": True
@@ -491,6 +667,12 @@ class GrowthSignalAnalyzer:
             upper_band = sma + (std * bb_std)
             lower_band = sma - (std * bb_std)
             
+            # 肯特納通道
+            kc_data = self.calculate_keltner_channels(data)
+            kc_upper = kc_data['upper'] if kc_data else None
+            kc_lower = kc_data['lower'] if kc_data else None
+            kc_basis = kc_data['basis'] if kc_data else None
+            
             # 處理 NaN 值，替換為 None 以便 JSON 序列化
             def clean_series(series):
                 return [None if pd.isna(x) else x for x in series.tolist()]
@@ -505,7 +687,10 @@ class GrowthSignalAnalyzer:
                 'ma20': clean_series(ma20),
                 'ma50': clean_series(ma50),
                 'bb_upper': clean_series(upper_band),
-                'bb_lower': clean_series(lower_band)
+                'bb_lower': clean_series(lower_band),
+                'kc_upper': clean_series(kc_upper) if kc_upper is not None else None,
+                'kc_lower': clean_series(kc_lower) if kc_lower is not None else None,
+                'kc_basis': clean_series(kc_basis) if kc_basis is not None else None
             }
             
             return chart_data

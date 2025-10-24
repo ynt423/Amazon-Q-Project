@@ -160,7 +160,7 @@ def get_recommended_stocks():
 def trigger_scan():
     """手動觸發股票掃描"""
     try:
-        max_stocks = request.json.get('max_stocks', 30) if request.json else 30
+        max_stocks = request.json.get('max_stocks', 100) if request.json else 100
         
         logging.info(f"手動觸發掃描: {max_stocks} 支股票")
         
@@ -186,8 +186,8 @@ def initialize_database_endpoint():
         scanner.cleanup_old_patterns(days=0)  # 清理所有舊數據
         
         # 執行初始掃描
-        initial_stocks = scanner.popular_stocks[:30]  # 掃描前30支熱門股票
-        results = scanner.batch_scan_stocks(initial_stocks, max_stocks=30)
+        initial_stocks = scanner.popular_stocks[:100]  # 掃描前100支熱門股票
+        results = scanner.batch_scan_stocks(initial_stocks, max_stocks=100)
         
         # 獲取推薦股票
         recommended = scanner.get_recommended_stocks(limit=8)
@@ -488,6 +488,30 @@ def remove_from_watchlist(ticker):
         logging.error(f"移除收藏失敗: {e}")
         return jsonify({"error": f"移除收藏失敗: {str(e)}", "success": False})
 
+def startup_scan():
+    """應用啟動時執行股票掃描"""
+    try:
+        logging.info("🚀 應用啟動 - 執行全球500大企業掃描...")
+        # 執行大量掃描 (150支股票)
+        results = scanner.batch_scan_stocks(max_stocks=150)
+        logging.info(f"✅ 啟動掃描完成: 掃描 {results['total_scanned']} 支股票，找到 {results['patterns_found']} 個形態")
+        
+        # 顯示 Google Sheets 狀態
+        if os.path.exists("service_account.json"):
+            logging.info("📊 Google Sheets 整合已啟用 - 數據已自動更新")
+        else:
+            logging.info("📊 Google Sheets 整合未啟用 - 執行 python setup_credentials.py 進行設置")
+        
+        return results
+    except Exception as e:
+        logging.error(f"❌ 啟動掃描失敗: {e}")
+        return None
+
 if __name__ == '__main__':
     logging.info("啟動股票分析服務...")
+    
+    # 應用啟動時執行掃描
+    startup_scan()
+    
+    # 啟動Flask應用
     app.run(debug=FLASK_DEBUG, port=FLASK_PORT)

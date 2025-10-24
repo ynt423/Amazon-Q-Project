@@ -262,6 +262,11 @@
                                     <i class="fas fa-database me-1"></i>
                                     初始化數據
                                 </button>
+                                <a href="https://docs.google.com/spreadsheets/d/1UsoATZK0FS7909hRdf8g8oPQ4_sHCRFLoX3GnkRzEJU/edit?gid=0#gid=0" 
+                                   target="_blank" class="btn btn-outline-info btn-sm">
+                                    <i class="fas fa-table me-1"></i>
+                                    查看選股清單
+                                </a>
                             </div>
                         </div>
                         <div class="row">
@@ -280,13 +285,13 @@
                                         <div class="h5 text-primary">${{ "%.2f"|format(stock.current_price) }}</div>
                                         {% if stock.pattern_types is defined %}
                                             {% for pattern in stock.pattern_types %}
-                                                <span class="badge bg-{{ 'success' if pattern == 'VCP' else 'primary' }} mb-1 me-1">
+                                                <span class="badge bg-{{ 'success' if pattern == 'VCP' else 'info' if pattern == 'KC' else 'primary' }} mb-1 me-1">
                                                     {{ pattern.replace('_', ' & ') }}
                                                 </span>
                                                 {% if not loop.last %}<br>{% endif %}
                                             {% endfor %}
                                         {% else %}
-                                            <span class="badge bg-{{ 'success' if stock.pattern_type == 'VCP' else 'primary' }} mb-2">
+                                            <span class="badge bg-{{ 'success' if stock.pattern_type == 'VCP' else 'info' if stock.pattern_type == 'KC' else 'primary' }} mb-2">
                                                 {{ stock.pattern_type.replace('_', ' & ') }}
                                             </span>
                                         {% endif %}
@@ -463,6 +468,18 @@
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span>Cup & Handle:</span>
                                     <span id="cupHandleStatus" class="badge bg-secondary">--</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>KC 信號:</span>
+                                    <span id="kcSignal" class="badge bg-secondary">--</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="alert alert-info" id="kcRecommendation" style="display: none; padding: 0.5rem; margin: 0; font-size: 0.85rem;">
+                                    <strong id="kcAction">--</strong><br>
+                                    <small id="kcDescription">--</small>
                                 </div>
                             </div>
                         </div>
@@ -701,6 +718,39 @@
                 cupHandleStatus.textContent = data.cup_handle_status;
                 cupHandleStatus.className = `badge ${data.cup_handle_detected ? 'bg-success' : 'bg-secondary'}`;
 
+                // 更新肯特納通道信號
+                const kcSignal = document.getElementById('kcSignal');
+                const kcRecommendation = document.getElementById('kcRecommendation');
+                const kcAction = document.getElementById('kcAction');
+                const kcDescription = document.getElementById('kcDescription');
+                
+                if (data.kc_signal) {
+                    kcSignal.textContent = data.kc_signal;
+                    const kcScore = data.kc_score || 50;
+                    if (kcScore >= 80) {
+                        kcSignal.className = 'badge bg-success';
+                    } else if (kcScore >= 60) {
+                        kcSignal.className = 'badge bg-warning';
+                    } else {
+                        kcSignal.className = 'badge bg-danger';
+                    }
+                    
+                    // 顯示KC策略建議
+                    if (data.kc_recommendation) {
+                        const rec = data.kc_recommendation;
+                        kcAction.textContent = rec.action || '--';
+                        kcDescription.textContent = rec.description || '--';
+                        kcRecommendation.className = `alert alert-${rec.color || 'info'}`;
+                        kcRecommendation.style.display = 'block';
+                    } else {
+                        kcRecommendation.style.display = 'none';
+                    }
+                } else {
+                    kcSignal.textContent = '--';
+                    kcSignal.className = 'badge bg-secondary';
+                    kcRecommendation.style.display = 'none';
+                }
+
                 // 更新風險管理建議
                 const stopLossPrice = document.getElementById('stopLossPrice');
                 stopLossPrice.textContent = data.recommended_stop_loss || 'N/A';
@@ -815,6 +865,59 @@
                 };
 
                 const traces = [candlestickTrace, ma20Trace, ma50Trace, volumeTrace];
+                
+                // 添加肯特納通道 (如果數據存在)
+                if (chartData.kc_upper && chartData.kc_lower && chartData.kc_basis) {
+                    // KC背景填充區域
+                    const kcBackgroundTrace = {
+                        x: chartData.dates.concat(chartData.dates.slice().reverse()),
+                        y: chartData.kc_upper.concat(chartData.kc_lower.slice().reverse()),
+                        type: 'scatter',
+                        mode: 'none',
+                        fill: 'toself',
+                        fillcolor: 'rgba(75, 192, 192, 0.1)',
+                        name: 'KC 通道',
+                        yaxis: 'y',
+                        showlegend: true,
+                        hoverinfo: 'skip'
+                    };
+
+                    const kcUpperTrace = {
+                        x: chartData.dates,
+                        y: chartData.kc_upper,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'KC Upper',
+                        yaxis: 'y',
+                        line: { color: 'rgba(75, 192, 192, 0.8)', width: 2 },
+                        showlegend: true
+                    };
+
+                    const kcLowerTrace = {
+                        x: chartData.dates,
+                        y: chartData.kc_lower,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'KC Lower',
+                        yaxis: 'y',
+                        line: { color: 'rgba(75, 192, 192, 0.8)', width: 2 },
+                        showlegend: true
+                    };
+
+                    const kcBasisTrace = {
+                        x: chartData.dates,
+                        y: chartData.kc_basis,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'KC Basis (EMA20)',
+                        yaxis: 'y',
+                        line: { color: 'rgba(75, 192, 192, 1)', width: 1.5 },
+                        showlegend: true
+                    };
+                    
+                    traces.push(kcBackgroundTrace, kcUpperTrace, kcLowerTrace, kcBasisTrace);
+                }
+                
                 Plotly.newPlot('priceChart', traces, layout, {responsive: true});
             }
 
